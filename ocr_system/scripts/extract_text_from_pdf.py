@@ -93,12 +93,14 @@ def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = 2.0):
         print(f"  Error: Could not create bitmap context")
         return None
 
-    # Fill white background (important for Vision)
+    # Fill ENTIRE context with white (not just the unscaled page rect)
+    from Quartz import CGRectMake
+    full_rect = CGRectMake(0, 0, width, height)
     CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 1.0)
-    CGContextFillRect(context, rect)
+    CGContextFillRect(context, full_rect)
 
-    # Draw PDF page (apply scale transform)
-    from Quartz import CGContextScaleCTM, CGContextConcatCTM, CGAffineTransformMakeScale
+    # Apply scale transform then draw PDF page
+    from Quartz import CGContextConcatCTM, CGAffineTransformMakeScale
     transform = CGAffineTransformMakeScale(scale, scale)
     CGContextConcatCTM(context, transform)
 
