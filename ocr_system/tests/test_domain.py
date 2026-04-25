@@ -42,6 +42,10 @@ BBOX_LINE_WIDTH = 100
 BBOX_LINE_HEIGHT = 20
 BBOX_PARAGRAPH_WIDTH = 100
 BBOX_PARAGRAPH_HEIGHT = 50
+BBOX_DISJOINT_OFFSET = 20
+BBOX_CENTER_HALF = 5.0
+OCR_PROCESSING_TIME_MS = 150
+LINE_Y_OFFSET = 20
 
 
 class TestBoundingBox:
@@ -58,14 +62,14 @@ class TestBoundingBox:
 
     def test_intersect_none(self):
         a = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
-        b = BoundingBox(20, 20, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
+        b = BoundingBox(BBOX_DISJOINT_OFFSET, BBOX_DISJOINT_OFFSET, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert a.intersect(b) is None
 
     def test_iou(self):
         a = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         b = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert a.iou(b) == 1.0
-        c = BoundingBox(20, 20, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
+        c = BoundingBox(BBOX_DISJOINT_OFFSET, BBOX_DISJOINT_OFFSET, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert a.iou(c) == 0.0
 
     def test_area(self):
@@ -74,7 +78,7 @@ class TestBoundingBox:
 
     def test_center(self):
         b = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
-        assert b.center == (5.0, 5.0)
+        assert b.center == (BBOX_CENTER_HALF, BBOX_CENTER_HALF)
 
 
 class TestPolygon:
@@ -166,7 +170,7 @@ class TestDocument:
     def test_get_full_text(self):
         doc = Document("img.png", DocumentType.GENERIC)
         line1 = TextLine("Line1", BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
-        line2 = TextLine("Line2", BoundingBox(0, 20, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
+        line2 = TextLine("Line2", BoundingBox(0, LINE_Y_OFFSET, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
         doc.add_line(line1)
         doc.add_line(line2)
         assert doc.get_full_text() == "Line1\nLine2"
@@ -212,5 +216,5 @@ class TestDomainEvents:
         e4 = LanguageCorrected(doc.id, 5)
         assert e4.corrections == 5
 
-        e5 = OCRCompleted(doc.id, 150)
+        e5 = OCRCompleted(doc.id, OCR_PROCESSING_TIME_MS)
         assert e5.processing_time_ms == 150

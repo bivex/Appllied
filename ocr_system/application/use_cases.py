@@ -43,30 +43,37 @@ class ProcessDocumentUseCase:
 
     async def execute(self, image_url: str, document_type: DocumentType) -> Document:
         """Execute OCR processing on a document image."""
-        # Create aggregate
         document = Document(image_url=image_url, document_type=document_type)
         aggregate = OCRAggregate(document)
         aggregate.record_event(OCRRequested(image_url, document.id))
 
-        # Retrieve image
-        image_data = await self.image_source.get_image(image_url)
+        image_data = await self._retrieve_image(image_url, aggregate, document)
 
-        # Select processing path
-        # In real implementation, we'd analyze image to estimate text density
         path = self.path_selector.select_path(
             image_size=(1, 1),  # placeholder, need actual dimensions
             estimated_text_density=self.ESTIMATED_TEXT_DENSITY_DEFAULT,
             language_hint=None,
         )
-
         aggregate.record_event(
             OCREngineSelected(document.id, path, "heuristic selection")
         )
 
-        # Process with selected path
+        ocr_result = await self._perform_ocr(image_data, path, aggregate, document)
+        await self._apply_corrections(aggregate, document)
+        return await self._finalize(aggregate, document, ocr_result)
+
+    async def _retrieve_image(
+        self, image_url: str, aggregate: OCRAggregate, document: Document
+    ) -> bytes:
+        """Retrieve image data from the source."""
+        return await self.image_source.get_image(image_url)
+
+    async def _perform_ocr(
+        self, image_data: bytes, path: OCRPath, aggregate: OCRAggregate, document: Document
+    ):
+        """Run OCR recognition and build domain entities from results."""
         ocr_result = await self.ocr_engine.recognize(image_data, path)
 
-        # Build domain entities from result
         for line_data in ocr_result.lines:
             line = TextLine(
                 text=line_data.text,
@@ -80,30 +87,32 @@ class ProcessDocumentUseCase:
                 document.id, len(ocr_result.lines), ocr_result.average_confidence
             )
         )
+        return ocr_result
 
-        # Apply language correction if needed
-        corrected_lines = []
+    async def _apply_corrections(
+        self, aggregate: OCRAggregate, document: Document
+    ) -> None:
+        """Apply language correction to recognized text lines."""
         total_corrections = 0
         for line in document.lines:
             corrected_text, corrections = self.ocr_engine.correct_language(line.text)
             if corrected_text != line.text:
                 line.text = corrected_text
                 total_corrections += corrections
-                corrected_lines.append(line)
 
         if total_corrections > 0:
             aggregate.record_event(LanguageCorrected(document.id, total_corrections))
 
-        # Extract structure (paragraphs, tables, entities)
-        structured_doc = self.ocr_engine.extract_structure(document)
+    async def _finalize(
+        self, aggregate: OCRAggregate, document: Document, ocr_result
+    ) -> Document:
+        """Extract structure, mark processed, and persist the document."""
+        self.ocr_engine.extract_structure(document)
 
-        # Mark as processed
         document.mark_processed()
         aggregate.record_event(OCRCompleted(document.id, ocr_result.processing_time_ms))
 
-        # Persist
         await self.document_repository.save(document)
-
         return document
 
 
@@ -118,8 +127,7 @@ class ExtractStructureUseCase:
         structured = self.ocr_engine.extract_structure(document)
 
         # Clear previous structure
-        document._paragraphs.clear()
-        document._tables.clear()
+        document.clear_structure()
 
         for para in structured.paragraphs:
             document.add_paragraph(para)

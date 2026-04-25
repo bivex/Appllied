@@ -287,8 +287,8 @@ class Entity:
         return self._confidence
 
 
-class Document:
-    """Aggregate root for a recognized document."""
+class DocumentBase:
+    """Base class with core document properties and line management."""
 
     def __init__(
         self,
@@ -300,9 +300,6 @@ class Document:
         self._image_url = image_url
         self._document_type = document_type
         self._lines: List[TextLine] = lines or []
-        self._paragraphs: List[Paragraph] = []
-        self._tables: List[Table] = []
-        self._metadata: Dict[str, Any] = {}
         self._created_at = datetime.now(timezone.utc)
         self._processed_at: Optional[datetime] = None
 
@@ -323,6 +320,38 @@ class Document:
         return self._lines.copy()
 
     @property
+    def created_at(self) -> datetime:
+        return self._created_at
+
+    @property
+    def processed_at(self) -> Optional[datetime]:
+        return self._processed_at
+
+    def add_line(self, line: TextLine) -> None:
+        self._lines.append(line)
+
+    def mark_processed(self) -> None:
+        self._processed_at = datetime.now(timezone.utc)
+
+    def get_full_text(self) -> str:
+        return "\n".join(line.text for line in self._lines)
+
+
+class Document(DocumentBase):
+    """Aggregate root for a recognized document with structure management."""
+
+    def __init__(
+        self,
+        image_url: str,
+        document_type: DocumentType,
+        lines: Optional[List[TextLine]] = None,
+    ):
+        super().__init__(image_url=image_url, document_type=document_type, lines=lines)
+        self._paragraphs: List[Paragraph] = []
+        self._tables: List[Table] = []
+        self._metadata: Dict[str, Any] = {}
+
+    @property
     def paragraphs(self) -> List[Paragraph]:
         return self._paragraphs.copy()
 
@@ -334,28 +363,16 @@ class Document:
     def metadata(self) -> Dict[str, Any]:
         return self._metadata.copy()
 
-    @property
-    def created_at(self) -> datetime:
-        return self._created_at
-
-    @property
-    def processed_at(self) -> Optional[datetime]:
-        return self._processed_at
-
-    def add_line(self, line: TextLine) -> None:
-        self._lines.append(line)
-
     def add_paragraph(self, paragraph: Paragraph) -> None:
         self._paragraphs.append(paragraph)
 
     def add_table(self, table: Table) -> None:
         self._tables.append(table)
 
-    def mark_processed(self) -> None:
-        self._processed_at = datetime.now(timezone.utc)
-
-    def get_full_text(self) -> str:
-        return "\n".join(line.text for line in self._lines)
+    def clear_structure(self) -> None:
+        """Remove all paragraphs and tables from the document."""
+        self._paragraphs.clear()
+        self._tables.clear()
 
     def extract_entities(self) -> List[Entity]:
         entities = []

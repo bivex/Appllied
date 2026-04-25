@@ -12,6 +12,7 @@ import argparse
 import random
 import string
 import sys
+from dataclasses import dataclass
 from pathlib import Path
 from typing import Tuple, Optional
 
@@ -39,6 +40,20 @@ try:
 except ImportError:
     print("Error: PIL/Pillow is required. Install with: pip install Pillow")
     sys.exit(1)
+
+
+@dataclass
+class TextImageOptions:
+    """Styling options for text image generation."""
+
+    width: int = IMAGE_WIDTH_CANDIDATES[0]
+    height: int = IMAGE_HEIGHT_CANDIDATES[0]
+    font_size: int = FONT_SIZE_CANDIDATES[1]
+    font_path: Optional[str] = None
+    background_color: Tuple[int, int, int] = BACKGROUND_PALETTE[0]
+    text_color: Tuple[int, int, int] = TEXT_COLOR_PALETTE[0]
+    padding: int = DEFAULT_IMAGE_PADDING
+    line_spacing: int = DEFAULT_LINE_SPACING
 
 
 def random_text(length: int = DEFAULT_TEXT_LENGTH) -> str:
@@ -96,40 +111,17 @@ def _load_font(font_size: int, font_path: Optional[str] = None):
     return ImageFont.load_default()
 
 
-def create_text_image(
+def _render_text(
+    draw: ImageDraw.ImageDraw,
     text: str,
-    output_path: Path,
-    width: int = IMAGE_WIDTH_CANDIDATES[0],
-    height: int = IMAGE_HEIGHT_CANDIDATES[0],
-    font_size: int = FONT_SIZE_CANDIDATES[1],
-    font_path: Optional[str] = None,
-    background_color: Tuple[int, int, int] = BACKGROUND_PALETTE[0],
-    text_color: Tuple[int, int, int] = TEXT_COLOR_PALETTE[0],
-    padding: int = DEFAULT_IMAGE_PADDING,
-    line_spacing: int = DEFAULT_LINE_SPACING,
-) -> Path:
-    """
-    Create an image with the given text.
-
-    Args:
-        text: Text to render (can contain \\n for multiple lines)
-        output_path: Where to save the PNG
-        width: Image width in pixels
-        height: Image height in pixels
-        font_size: Font size in points
-        font_path: Path to .ttf/.otf font file (uses default if None)
-        background_color: RGB tuple
-        text_color: RGB tuple
-        padding: Padding around text in pixels
-        line_spacing: Extra spacing between lines
-
-    Returns:
-        Path to saved image
-    """
-    img = Image.new("RGB", (width, height), color=background_color)
-    draw = ImageDraw.Draw(img)
-    font = _load_font(font_size, font_path)
-
+    font,
+    width: int,
+    height: int,
+    text_color: Tuple[int, int, int],
+    padding: int,
+    line_spacing: int,
+) -> None:
+    """Render text onto a PIL Draw context, centered vertically and horizontally."""
     lines = text.split("\n")
     line_heights = []
     for line in lines:
@@ -146,10 +138,63 @@ def create_text_image(
         draw.text((x, y), line, fill=text_color, font=font)
         y += line_heights[i] + line_spacing
 
+
+def create_text_image(
+    text: str,
+    output_path: Path,
+    options: TextImageOptions = TextImageOptions(),
+) -> Path:
+    """
+    Create an image with the given text.
+
+    Args:
+        text: Text to render (can contain \\n for multiple lines)
+        output_path: Where to save the PNG
+        options: Styling options (width, height, font, colors, padding, spacing)
+
+    Returns:
+        Path to saved image
+    """
+    img = Image.new("RGB", (options.width, options.height), color=options.background_color)
+    draw = ImageDraw.Draw(img)
+    font = _load_font(options.font_size, options.font_path)
+
+    _render_text(
+        draw, text, font,
+        options.width, options.height,
+        options.text_color, options.padding, options.line_spacing,
+    )
+
     output_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(output_path)
-    print(f"Saved: {output_path} ({width}x{height}, {len(text)} chars)")
+    print(f"Saved: {output_path} ({options.width}x{options.height}, {len(text)} chars)")
     return output_path
+
+
+def _generate_random_image(
+    output_dir: Path,
+    index: int,
+    base_name: str,
+) -> None:
+    """Generate a single random text image with randomised styling."""
+    if random.random() < MULTILINE_PROBABILITY:
+        text = random_sentence()
+    else:
+        lines = [random_sentence() for _ in range(
+            random.randint(MULTILINE_COUNT_MIN, MULTILINE_COUNT_MAX)
+        )]
+        text = "\n".join(lines)
+
+    options = TextImageOptions(
+        width=random.choice(IMAGE_WIDTH_CANDIDATES),
+        height=random.choice(IMAGE_HEIGHT_CANDIDATES),
+        font_size=random.choice(FONT_SIZE_CANDIDATES),
+        background_color=random.choice(BACKGROUND_PALETTE),
+        text_color=random.choice(TEXT_COLOR_PALETTE),
+    )
+
+    filename = f"{base_name}_{index:03d}.png"
+    create_text_image(text=text, output_path=output_dir / filename, options=options)
 
 
 def generate_dataset(
@@ -168,32 +213,23 @@ def generate_dataset(
     output_dir.mkdir(parents=True, exist_ok=True)
 
     for i in range(1, num_images + 1):
-        if random.random() < MULTILINE_PROBABILITY:
-            text = random_sentence()
-        else:
-            lines = [random_sentence() for _ in range(
-                random.randint(MULTILINE_COUNT_MIN, MULTILINE_COUNT_MAX)
-            )]
-            text = "\n".join(lines)
-
-        width = random.choice(IMAGE_WIDTH_CANDIDATES)
-        height = random.choice(IMAGE_HEIGHT_CANDIDATES)
-        font_size = random.choice(FONT_SIZE_CANDIDATES)
-        bg = random.choice(BACKGROUND_PALETTE)
-        fg = random.choice(TEXT_COLOR_PALETTE)
-
-        filename = f"{base_name}_{i:03d}.png"
-        create_text_image(
-            text=text,
-            output_path=output_dir / filename,
-            width=width,
-            height=height,
-            font_size=font_size,
-            background_color=bg,
-            text_color=fg,
-        )
+        _generate_random_image(output_dir, i, base_name)
 
     print(f"\nGenerated {num_images} images in {output_dir}")
+
+
+def _build_default_options(args) -> TextImageOptions:
+    """Construct TextImageOptions from parsed CLI arguments."""
+    bg_color = parse_color(args.bg_color)
+    text_color = parse_color(args.text_color)
+    return TextImageOptions(
+        width=args.width,
+        height=args.height,
+        font_size=args.font_size,
+        font_path=args.font,
+        background_color=bg_color,
+        text_color=text_color,
+    )
 
 
 def main():
@@ -239,8 +275,7 @@ def main():
     args = parser.parse_args()
 
     try:
-        bg_color = parse_color(args.bg_color)
-        text_color = parse_color(args.text_color)
+        options = _build_default_options(args)
     except ValueError as e:
         print(f"Error: {e}")
         sys.exit(1)
@@ -249,12 +284,7 @@ def main():
         create_text_image(
             text=args.text,
             output_path=args.output_dir / "custom.png",
-            width=args.width,
-            height=args.height,
-            font_size=args.font_size,
-            font_path=args.font,
-            background_color=bg_color,
-            text_color=text_color,
+            options=options,
         )
     else:
         generate_dataset(

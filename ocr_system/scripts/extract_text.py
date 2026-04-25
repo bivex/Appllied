@@ -19,6 +19,13 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from ocr_system.infrastructure.constants import (
+    OCR_CONFIDENCE_FALLBACK,
+    OCR_TOP_CANDIDATES_COUNT,
+    OUTPUT_SEPARATOR_WIDTH,
+)
+from ocr_system.scripts.image_utils import fix_transparent_background
+
 try:
     # Try to import Vision via PyObjC
     import Vision
@@ -79,22 +86,59 @@ def load_image_cgimage(image_path: Path) -> Optional[object]:
         print(f"Error loading image: {e}")
         return None
 
-        # Get first image
-        cg_image = CGImageSourceCreateImageAtIndex(source, 0, None)
-        if cg_image is None:
-            print(f"Error: Could not decode image from {image_path}")
-            return None
 
-        return cg_image
+def _configure_vision_request(
+    request,
+    recognition_level: str,
+    languages: Optional[List[str]],
+    use_language_correction: bool,
+    revision: Optional[int],
+) -> None:
+    """Configure a VNRecognizeTextRequest with recognition options."""
+    # Set recognition level
+    if recognition_level.lower() == "fast":
+        request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelFast)
+    else:
+        request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
 
-    except ImportError:
-        print(
-            "Error: Quartz framework not available. This script must run on macOS with PyObjC."
-        )
-        return None
-    except Exception as e:
-        print(f"Error loading image: {e}")
-        return None
+    # Set languages
+    if languages:
+        request.setRecognitionLanguages_(languages)
+
+    # Language correction
+    if use_language_correction and hasattr(request, "usesLanguageCorrection"):
+        request.setUsesLanguageCorrection_(use_language_correction)
+
+    # Revision (for iOS 16+ handwriting improvements)
+    if revision is not None and hasattr(request, "setRevision_"):
+        request.setRevision_(revision)
+
+
+def _collect_observations(observations) -> Tuple[List[str], float]:
+    """Extract text and confidence from Vision observation results."""
+    texts = []
+    total_conf = 0.0
+    count = 0
+
+    for obs in observations:
+        if hasattr(obs, "topCandidates_"):
+            candidates = obs.topCandidates_(OCR_TOP_CANDIDATES_COUNT)
+            if candidates and len(candidates) > 0:
+                candidate = candidates[0]
+                text = candidate.string()
+                conf = candidate.confidence()
+                texts.append(text)
+                total_conf += conf
+                count += 1
+        else:
+            # Fallback: try to get string directly
+            if hasattr(obs, "string"):
+                texts.append(obs.string())
+                total_conf += OCR_CONFIDENCE_FALLBACK
+                count += 1
+
+    avg_conf = total_conf / count if count > 0 else 0.0
+    return texts, avg_conf
 
 
 def recognize_text(
@@ -123,23 +167,9 @@ def recognize_text(
     # Create request
     request = Vision.VNRecognizeTextRequest.alloc().init()
 
-    # Set recognition level
-    if recognition_level.lower() == "fast":
-        request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelFast)
-    else:
-        request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelAccurate)
-
-    # Set languages
-    if languages:
-        request.setRecognitionLanguages_(languages)
-
-    # Language correction
-    if use_language_correction and hasattr(request, "usesLanguageCorrection"):
-        request.setUsesLanguageCorrection_(use_language_correction)
-
-    # Revision (for iOS 16+ handwriting improvements)
-    if revision is not None and hasattr(request, "setRevision_"):
-        request.setRevision_(revision)
+    _configure_vision_request(
+        request, recognition_level, languages, use_language_correction, revision
+    )
 
     # Create handler
     handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(
@@ -147,8 +177,6 @@ def recognize_text(
     )
 
     # Perform request (synchronously)
-    import objc
-
     error = objc.NULL
     success = handler.performRequests_error_([request], error)
     # Handle the result properly
@@ -166,70 +194,69 @@ def recognize_text(
     if not observations:
         return [], 0.0
 
-    texts = []
-    total_conf = 0.0
-    count = 0
-
-    for obs in observations:
-        if hasattr(obs, "topCandidates_"):
-            candidates = obs.topCandidates_(1)
-            if candidates and len(candidates) > 0:
-                candidate = candidates[0]
-                text = candidate.string()
-                conf = candidate.confidence()
-                texts.append(text)
-                total_conf += conf
-                count += 1
-        else:
-            # Fallback: try to get string directly
-            if hasattr(obs, "string"):
-                texts.append(obs.string())
-                total_conf += 0.5  # unknown confidence
-                count += 1
-
-    avg_conf = total_conf / count if count > 0 else 0.0
-    return texts, avg_conf
+    return _collect_observations(observations)
 
 
-def fix_transparent_background(
-    image_path: Path, output_path: Optional[Path] = None
-) -> Path:
+def _validate_and_prepare(args) -> Tuple[Path, Optional[Path]]:
     """
-    Composite an RGBA image onto a white background to avoid Vision's
-    transparent→black interpretation issue.
+    Validate arguments and prepare the image for OCR.
 
-    Args:
-        image_path: Path to input image (may have alpha)
-        output_path: Where to save composited image (if None, temp file)
+    Handles Vision availability check, image validation, transparent
+    background fixing, and CGImage loading.
 
     Returns:
-        Path to composited image
+        Tuple of (image_path, temp_file_to_delete or None)
     """
-    try:
-        from PIL import Image
-    except ImportError:
-        print("Error: Pillow required for background compositing. pip install Pillow")
-        exit(1)
-
-    img = Image.open(image_path)
-
-    if img.mode in ("RGBA", "LA"):
-        # Create white background
-        background = Image.new("RGB", img.size, (255, 255, 255))
-        # Composite using alpha as mask
-        background.paste(
-            img, mask=img.split()[-1] if img.mode == "RGBA" else img.split()[-1]
+    if not VISION_AVAILABLE:
+        print("\nERROR: Vision framework is not available.")
+        print("This script requires:")
+        print("  1. macOS (or iOS with appropriate bridge)")
+        print(
+            "  2. PyObjC: pip install pyobjc-framework-Vision pyobjc-framework-CoreML"
         )
-        result = background
+        print("\nAlternatively, use the OCRContainer from the Python implementation:")
+        print("  from container import OCRContainer")
+        print("  container = OCRContainer()")
+        print("  result = await container.process_document(image_path)")
+        sys.exit(1)
+
+    # Validate image
+    if not args.image.exists():
+        print(f"Error: Image not found: {args.image}")
+        sys.exit(1)
+
+    # Handle transparent background (PKDrawing/PencilKit)
+    to_delete = None
+    image_path = args.image
+    if not args.no_fix_bg:
+        # Check if image has alpha channel
+        try:
+            from PIL import Image
+
+            img = Image.open(image_path)
+            if img.mode in ("RGBA", "LA", "P"):
+                print(
+                    "Detected transparent/masked image -- compositing onto white background..."
+                )
+                image_path = fix_transparent_background(image_path)
+                to_delete = image_path  # cleanup later
+        except ImportError:
+            print(
+                "Warning: Pillow not available -- skipping transparency check. Install: pip install Pillow"
+            )
+
+    return image_path, to_delete
+
+
+def _format_output(texts: List[str], avg_conf: float, show_confidence: bool) -> str:
+    """Format recognized text lines into the output string."""
+    if show_confidence:
+        output_lines = []
+        for text in texts:
+            output_lines.append(f"[{avg_conf:.2%}] {text}")
+        return "\n".join(output_lines)
     else:
-        result = img.convert("RGB")
-
-    if output_path is None:
-        output_path = image_path.parent / f"composited_{image_path.name}"
-
-    result.save(output_path)
-    print(f"Composited image saved: {output_path}")
-    return output_path
+        return "\n".join(texts)
 
 
 def main():
@@ -277,51 +304,16 @@ def main():
 
     args = parser.parse_args()
 
-    if not VISION_AVAILABLE:
-        print("\nERROR: Vision framework is not available.")
-        print("This script requires:")
-        print("  1. macOS (or iOS with appropriate bridge)")
-        print(
-            "  2. PyObjC: pip install pyobjc-framework-Vision pyobjc-framework-CoreML"
-        )
-        print("\nAlternatively, use the OCRContainer from the Python implementation:")
-        print("  from container import OCRContainer")
-        print("  container = OCRContainer()")
-        print("  result = await container.process_document(image_path)")
-        exit(1)
-
-    # Validate image
-    if not args.image.exists():
-        print(f"Error: Image not found: {args.image}")
-        exit(1)
-
-    # Parse languages
-    langs = [lang.strip() for lang in args.languages.split(",")]
-
-    # Handle transparent background (PKDrawing/PencilKit)
-    to_delete = None
-    image_path = args.image
-    if not args.no_fix_bg:
-        # Check if image has alpha channel
-        try:
-            from PIL import Image
-
-            img = Image.open(image_path)
-            if img.mode in ("RGBA", "LA", "P"):
-                print(
-                    "Detected transparent/masked image — compositing onto white background..."
-                )
-                image_path = fix_transparent_background(image_path)
-                to_delete = image_path  # cleanup later
-        except ImportError:
-            print(
-                "Warning: Pillow not available — skipping transparency check. Install: pip install Pillow"
-            )
+    # Validate and prepare image
+    image_path, to_delete = _validate_and_prepare(args)
 
     # Load image as CGImage
     cg_image = load_image_cgimage(image_path)
     if cg_image is None:
-        exit(1)
+        sys.exit(1)
+
+    # Parse languages
+    langs = [lang.strip() for lang in args.languages.split(",")]
 
     # Set revision for handwriting
     revision = None
@@ -344,26 +336,19 @@ def main():
         )
     except Exception as e:
         print(f"Recognition failed: {e}")
-        exit(1)
+        sys.exit(1)
 
-    # Format output
-    if args.confidence:
-        output_lines = []
-        for text in texts:
-            output_lines.append(f"[{avg_conf:.2%}] {text}")
-        output = "\n".join(output_lines)
-    else:
-        output = "\n".join(texts)
+    # Format and write output
+    output = _format_output(texts, avg_conf, args.confidence)
 
-    # Write output
     if args.output:
         args.output.write_text(output)
         print(f"Text saved to {args.output}")
     else:
         print("\nRecognized Text:")
-        print("=" * 60)
+        print("=" * OUTPUT_SEPARATOR_WIDTH)
         print(output)
-        print("=" * 60)
+        print("=" * OUTPUT_SEPARATOR_WIDTH)
         print(f"\nAverage confidence: {avg_conf:.2%}")
         print(f"Lines detected: {len(texts)}")
 

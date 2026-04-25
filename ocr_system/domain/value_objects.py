@@ -16,11 +16,19 @@ class BoundingBox:
     height: float
     confidence: float = 1.0
 
+    @property
+    def right(self) -> float:
+        return self.x + self.width
+
+    @property
+    def bottom(self) -> float:
+        return self.y + self.height
+
     def intersect(self, other: BoundingBox) -> Optional[BoundingBox]:
         x1 = max(self.x, other.x)
         y1 = max(self.y, other.y)
-        x2 = min(self.x + self.width, other.x + other.width)
-        y2 = min(self.y + self.height, other.y + other.height)
+        x2 = min(self.right, other.right)
+        y2 = min(self.bottom, other.bottom)
         if x2 <= x1 or y2 <= y1:
             return None
         return BoundingBox(

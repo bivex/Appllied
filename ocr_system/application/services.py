@@ -7,11 +7,15 @@ from typing import Optional
 
 from domain import Language, OCRPath
 
-# Constants for path selection strategy
-MEGAPIXELS_THRESHOLD = 2.0
-TEXT_DENSITY_THRESHOLD = 0.3
-PROCESSING_TIME_PER_MEGAPIXEL_FAST = 10  # ms
-PROCESSING_TIME_PER_MEGAPIXEL_ACCURATE = 100  # ms
+from ocr_system.infrastructure.constants import (
+    PATH_SELECTION_MEGAPIXEL_THRESHOLD,
+    PATH_SELECTION_TEXT_DENSITY_THRESHOLD,
+    PIXELS_PER_MEGAPIXEL,
+)
+
+# Processing time estimation constants
+PROCESSING_TIME_PER_MEGAPIXEL_FAST = 10
+PROCESSING_TIME_PER_MEGAPIXEL_ACCURATE = 100
 
 
 class LanguageCorrectionService:
@@ -65,9 +69,9 @@ class PathSelectionStrategy(ABC):
         pixels = width * height
 
         if path == OCRPath.FAST:
-            return pixels / 1_000_000 * PROCESSING_TIME_PER_MEGAPIXEL_FAST
+            return pixels / PIXELS_PER_MEGAPIXEL * PROCESSING_TIME_PER_MEGAPIXEL_FAST
         else:
-            return pixels / 1_000_000 * PROCESSING_TIME_PER_MEGAPIXEL_ACCURATE
+            return pixels / PIXELS_PER_MEGAPIXEL * PROCESSING_TIME_PER_MEGAPIXEL_ACCURATE
 
 
 class SimplePathSelectionStrategy(PathSelectionStrategy):
@@ -81,10 +85,9 @@ class SimplePathSelectionStrategy(PathSelectionStrategy):
     ) -> OCRPath:
         """Select FAST or ACCURATE based on image characteristics."""
         width, height = image_size
-        megapixels = (width * height) / 1_000_000
+        megapixels = (width * height) / PIXELS_PER_MEGAPIXEL
 
-        # Use fast path for small images or high text density
-        if megapixels < MEGAPIXELS_THRESHOLD or estimated_text_density > TEXT_DENSITY_THRESHOLD:
+        if megapixels < PATH_SELECTION_MEGAPIXEL_THRESHOLD or estimated_text_density > PATH_SELECTION_TEXT_DENSITY_THRESHOLD:
             return OCRPath.FAST
 
         # Use accurate path for larger images with sparse text

@@ -8,12 +8,9 @@ Implements ports defined in application layer.
 from __future__ import annotations
 
 import asyncio
-import io
-import json
 import os
-from abc import ABC, abstractmethod
 from pathlib import Path
-from typing import List, Optional, Dict, Any
+from typing import List, Optional, Dict
 from uuid import UUID
 
 from application import (
@@ -30,11 +27,7 @@ from domain import (
     TextLine,
     BoundingBox,
     OCRPath,
-    Language,
     Paragraph,
-    Table,
-    Entity,
-    EntityType,
 )
 from .constants import (
     VISION_FAST_PROCESSING_TIME_MS,
@@ -62,6 +55,7 @@ from .constants import (
     HTTP_EXISTS_CHECK_TIMEOUT_SECONDS,
     OCR_DEFAULT_MAX_IMAGE_SIZE_MB,
 )
+from .entity_extraction import EntityExtractor  # noqa: F401 — re-exported below
 
 # ===============================
 # Vision Framework Adapter (macOS/iOS)
@@ -205,51 +199,65 @@ class VisionOCRAdapter(OCREngine):
 
     def extract_structure(self, document: Document) -> StructuredDocument:
         """Extract paragraphs, tables, and entities from document."""
-        # Basic structure extraction based on line grouping
-        paragraphs = []
-        tables = []
-        entities = []
-
-        # Group lines into paragraphs by vertical spacing (simple heuristic)
         lines = document.lines
         if not lines:
-            return StructuredDocument(paragraphs, tables, entities)
+            return StructuredDocument([], [], [])
 
+        paragraphs = self._group_lines_into_paragraphs(lines)
+        entities = EntityExtractor().extract_from_lines(lines)
+
+        # Table detection (placeholder; real implementation would use column detection)
+        tables: list = []
+
+        return StructuredDocument(paragraphs, tables, entities)
+
+    # ------------------------------------------------------------------
+    # Paragraph grouping
+    # ------------------------------------------------------------------
+
+    @staticmethod
+    def _group_lines_into_paragraphs(
+        lines: List[TextLine],
+        gap_threshold: float = PARAGRAPH_VERTICAL_GAP_THRESHOLD,
+    ) -> List[Paragraph]:
+        """Group *lines* into paragraphs based on vertical spacing.
+
+        Consecutive lines whose vertical gap is below *gap_threshold* are
+        merged into a single paragraph.
+        """
+        if not lines:
+            return []
+
+        paragraphs: List[Paragraph] = []
         current_para_lines = [lines[0]]
+
         for i in range(1, len(lines)):
             prev_line = lines[i - 1]
             curr_line = lines[i]
 
-            # If vertical gap is small, consider same paragraph
             gap = abs(
                 curr_line.bounding_box.y
                 - (prev_line.bounding_box.y + prev_line.bounding_box.height)
             )
-            if gap < PARAGRAPH_VERTICAL_GAP_THRESHOLD:
+
+            if gap < gap_threshold:
                 current_para_lines.append(curr_line)
             else:
-                # Create paragraph
-                para = self._create_paragraph(current_para_lines)
-                paragraphs.append(para)
+                paragraphs.append(
+                    VisionOCRAdapter._create_paragraph(current_para_lines)
+                )
                 current_para_lines = [curr_line]
 
         if current_para_lines:
-            para = self._create_paragraph(current_para_lines)
-            paragraphs.append(para)
+            paragraphs.append(
+                VisionOCRAdapter._create_paragraph(current_para_lines)
+            )
 
-        # Detect tables (simple heuristic: aligned columns)
-        # This is a placeholder; real implementation would use column detection
+        return paragraphs
 
-        # Extract entities (emails, phones, URLs)
-        for line in lines:
-            line_entities = self._extract_entities_from_line(line)
-            entities.extend(line_entities)
-
-        return StructuredDocument(paragraphs, tables, entities)
-
-    def _create_paragraph(self, lines: List[TextLine]) -> Paragraph:
+    @staticmethod
+    def _create_paragraph(lines: List[TextLine]) -> Paragraph:
         """Create a paragraph from a group of lines."""
-        # Combined bounding box
         if not lines:
             raise ValueError("Cannot create paragraph from empty lines")
 
@@ -269,76 +277,6 @@ class VisionOCRAdapter(OCREngine):
         reading_order = 0  # placeholder; assign based on position
 
         return Paragraph(lines=lines, bounding_box=bbox, reading_order=reading_order)
-
-    def _extract_entities_from_line(self, line: TextLine) -> List[Entity]:
-        """Extract entities like email, phone, URL from a line."""
-        import re
-
-        entities = []
-        text = line.text
-
-        # Email regex
-        email_pattern = r"[\w\.-]+@[\w\.-]+\.\w+"
-        for match in re.finditer(email_pattern, text):
-            start, end = match.span()
-            entity_text = text[start:end]
-            # Rough bbox estimation (simplified)
-            bbox = BoundingBox(
-                x=line.bounding_box.x + (start / len(text) * line.bounding_box.width),
-                y=line.bounding_box.y,
-                width=(end - start) / len(text) * line.bounding_box.width,
-                height=line.bounding_box.height,
-                confidence=line.confidence,
-            )
-            entity = Entity(
-                entity_type=EntityType.EMAIL,
-                value=entity_text,
-                bounding_box=bbox,
-                confidence=line.confidence,
-            )
-            entities.append(entity)
-
-        # URL pattern
-        url_pattern = r"https?://[^\s]+"
-        for match in re.finditer(url_pattern, text):
-            start, end = match.span()
-            entity_text = text[start:end]
-            bbox = BoundingBox(
-                x=line.bounding_box.x + (start / len(text) * line.bounding_box.width),
-                y=line.bounding_box.y,
-                width=(end - start) / len(text) * line.bounding_box.width,
-                height=line.bounding_box.height,
-                confidence=line.confidence,
-            )
-            entity = Entity(
-                entity_type=EntityType.URL,
-                value=entity_text,
-                bounding_box=bbox,
-                confidence=line.confidence,
-            )
-            entities.append(entity)
-
-        # Phone pattern (simple)
-        phone_pattern = r"(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"
-        for match in re.finditer(phone_pattern, text):
-            start, end = match.span()
-            entity_text = text[start:end]
-            bbox = BoundingBox(
-                x=line.bounding_box.x + (start / len(text) * line.bounding_box.width),
-                y=line.bounding_box.y,
-                width=(end - start) / len(text) * line.bounding_box.width,
-                height=line.bounding_box.height,
-                confidence=line.confidence,
-            )
-            entity = Entity(
-                entity_type=EntityType.PHONE,
-                value=entity_text,
-                bounding_box=bbox,
-                confidence=line.confidence,
-            )
-            entities.append(entity)
-
-        return entities
 
 
 # ===============================

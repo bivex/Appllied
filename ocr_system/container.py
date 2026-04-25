@@ -91,13 +91,16 @@ class OCRContainer:
             self._path_selector = SimplePathSelector()
         return self._path_selector
 
-    def create_process_document_use_case(self) -> ProcessDocumentUseCase:
-        return ProcessDocumentUseCase(
-            image_source=self.get_image_source(),
-            ocr_engine=self.get_ocr_engine(),
-            document_repository=self.get_document_repository(),
-            path_selector=self.get_path_selector(),
+    def _get_use_case_dependencies(self):
+        return (
+            self.get_image_source(),
+            self.get_ocr_engine(),
+            self.get_document_repository(),
+            self.get_path_selector(),
         )
+
+    def create_process_document_use_case(self) -> ProcessDocumentUseCase:
+        return ProcessDocumentUseCase(*self._get_use_case_dependencies())
 
     def create_get_document_use_case(self) -> GetDocumentUseCase:
         return GetDocumentUseCase(self.get_document_repository())

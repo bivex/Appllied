@@ -37,16 +37,20 @@ async def main():
         image_url=image_path, document_type=DocumentType.GENERIC
     )
 
-    # Output results
+    _print_results(document)
+
+
+def _print_results(document):
+    """Format and print OCR results to stdout."""
     print("\n" + "=" * 60)
     print("OCR RESULTS")
     print("=" * 60)
     print(f"Document ID: {document.id}")
     print(f"Processed at: {document.processed_at}")
     print(f"Number of lines: {len(document.lines)}")
-    print(
-        f"Average confidence: {sum(l.confidence for l in document.lines) / len(document.lines):.2%}"
-    )
+    if document.lines:
+        avg_confidence = sum(l.confidence for l in document.lines) / len(document.lines)
+        print(f"Average confidence: {avg_confidence:.2%}")
     print("\nFull text:")
     print("-" * 60)
     print(document.get_full_text())
@@ -55,7 +59,7 @@ async def main():
     print(f"  Tables: {len(document.tables)}")
     entities = document.extract_entities()
     if entities:
-        print(f"  Entities:")
+        print("  Entities:")
         for e in entities:
             print(f"    - {e.entity_type.value}: {e.value} (conf: {e.confidence:.2%})")
 
