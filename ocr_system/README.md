@@ -241,11 +241,82 @@ The `scripts/` directory provides command-line utilities:
 # Generate 5 random text images
 python -m ocr_system.scripts.generate_text_images
 
-# Generate 20 images with custom text
-python -m ocr_system.scripts.generate_text_images --num 20 --output-dir ./data/train
+# After install, you can also use:
+ocr-generate --num 10 --output-dir ./data/train
 
 # Create single image with specific text
-python -m ocr_system.scripts.generate_text_images --text "Hello World" --font-size 48 --bg-color "white" --text-color "black"
+ocr-generate --text "Hello Vision OCR" --font-size 64
+```
+
+Options:
+- `--num N`: Number of images to generate
+- `--output-dir DIR`: Output directory (default: `generated_images`)
+- `--text STR`: Specific text to render (single image)
+- `--width/--height`: Image dimensions
+- `--font-size`: Font size in points
+- `--font PATH`: Path to .ttf/.otf font file
+- `--bg-color/--text-color`: Color name or R,G,B (e.g., `255,255,255`)
+
+### Extract Text from Images (Vision)
+
+```bash
+# Extract text from image (requires macOS + PyObjC)
+python -m ocr_system.scripts.extract_text image.png
+
+# Use fast mode (less accurate but quicker)
+python -m ocr_system.scripts.extract_text image.png --level fast
+
+# Handwriting-optimized (iOS 16+/macOS 13+)
+python -m ocr_system.scripts.extract_text drawing.png --handwriting
+
+# Save output to file
+python -m ocr_system.scripts.extract_text image.png --output text.txt
+
+# Show confidence scores
+python -m ocr_system.scripts.extract_text image.png --confidence
+
+# Multi-language
+python -m ocr_system.scripts.extract_text image.png --languages en-US,fr-FR
+```
+
+**Important**: PencilKit drawings have transparent backgrounds. Vision interprets transparency as black, so black strokes become invisible. The script auto-fixes this by compositing onto white. To disable:
+
+```bash
+python -m ocr_system.scripts.extract_text image.png --no-fix-bg
+```
+
+### Extract Text from PDFs (Vision)
+
+```bash
+# Extract all pages from PDF
+python -m ocr_system.scripts.extract_text_from_pdf document.pdf
+
+# Specific pages
+python -m ocr_system.scripts.extract_text_from_pdf document.pdf --pages 1-3,5
+
+# Save to file with page separators
+python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --output text.txt --separator "\n\n--- PAGE ---\n\n"
+
+# With confidence scores per page
+python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --confidence
+
+# French language PDF
+python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --languages fr-FR
+```
+
+**Note**: PDF extraction requires:
+- macOS + PyObjC (`pyobjc-framework-Vision`, `pyobjc-framework-CoreML`)
+- The script renders each PDF page to an image (via Quartz) then runs Vision OCR
+- Processing time depends on page count and resolution
+
+### Entry Points
+
+After `pip install -e .`, all scripts are available as commands:
+
+```bash
+ocr-generate              # Generate test images
+ocr-extract               # Extract text from single image
+ocr-extract-pdf           # Extract text from PDF
 ```
 
 Options:
