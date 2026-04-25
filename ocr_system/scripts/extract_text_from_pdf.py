@@ -302,20 +302,26 @@ def main():
     # Output
     full_text = args.separator.join(all_texts)
 
+    # Determine output path: --output or auto-generate next to PDF
     if args.output:
-        args.output.write_text(full_text)
-        print(f"\nSaved to: {args.output}")
+        out_path = args.output
     else:
-        print("\n" + "=" * 60)
-        print("EXTRACTED TEXT")
-        print("=" * 60)
-        if args.confidence:
-            for i, (txt, conf) in enumerate(zip(all_texts, all_confs), 1):
-                print(f"\n--- Page {i} [{conf:.2%}] ---")
-                print(txt)
-        else:
-            print(full_text)
-        print("=" * 60)
+        out_path = args.pdf.with_suffix(".txt")
+
+    out_path.write_text(full_text, encoding="utf-8")
+    print(f"\nSaved to: {out_path}")
+
+    # Also print to console
+    print("\n" + "=" * 60)
+    print("EXTRACTED TEXT")
+    print("=" * 60)
+    if args.confidence:
+        for i, (txt, conf) in enumerate(zip(all_texts, all_confs), 1):
+            print(f"\n--- Page {i} [{conf:.2%}] ---")
+            print(txt)
+    else:
+        print(full_text)
+    print("=" * 60)
 
     # Summary
     valid_confs = [c for c in all_confs if c > 0]
