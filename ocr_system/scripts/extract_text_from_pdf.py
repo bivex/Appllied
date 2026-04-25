@@ -9,6 +9,7 @@ from __future__ import annotations
 
 import argparse
 import sys
+from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
 from typing import List, Tuple
 
@@ -33,6 +34,7 @@ try:
     import Vision
     import CoreML
     from Foundation import NSURL
+
     VISION_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import required frameworks: {e}")
@@ -65,7 +67,9 @@ def resolve_pages(args) -> List[int]:
     return None
 
 
-def process_page(pdf_url, page_num: int, total: int, args, revision) -> Tuple[str, float]:
+def process_page(
+    pdf_url, page_num: int, total: int, args, revision
+) -> Tuple[str, float]:
     """Render and OCR a single page, returning (text, confidence)."""
     print(f"\nPage {page_num}/{total}...", flush=True)
     cg_img = render_pdf_page_to_cgimage(pdf_url, page_num, scale=args.scale)
@@ -122,24 +126,53 @@ def _build_parser() -> argparse.ArgumentParser:
         description="Extract text from PDF using Apple Vision OCR"
     )
     parser.add_argument("pdf", type=Path, help="PDF file path")
-    parser.add_argument("--pages", "-p", type=str, default=None,
-                        help="Page range (e.g., '1-3,5' or 'all')")
-    parser.add_argument("--level", "-l", choices=["fast", "accurate"], default="accurate",
-                        help="Recognition level")
-    parser.add_argument("--languages", "-lang", type=str, default="en-US",
-                        help="Comma-separated BCP-47 codes")
-    parser.add_argument("--no-correction", action="store_true",
-                        help="Disable language correction")
-    parser.add_argument("--handwriting", action="store_true",
-                        help="Use handwriting-optimized mode (iOS 16+)")
-    parser.add_argument("--output", "-o", type=Path, default=None,
-                        help="Save to file")
-    parser.add_argument("--separator", type=str, default="\n\n",
-                        help="Page separator")
-    parser.add_argument("--confidence", action="store_true",
-                        help="Show confidence per page")
-    parser.add_argument("--scale", type=float, default=PDF_RENDER_SCALE_DEFAULT,
-                        help=f"Render scale factor (default: {PDF_RENDER_SCALE_DEFAULT})")
+    parser.add_argument(
+        "--pages",
+        "-p",
+        type=str,
+        default=None,
+        help="Page range (e.g., '1-3,5' or 'all')",
+    )
+    parser.add_argument(
+        "--level",
+        "-l",
+        choices=["fast", "accurate"],
+        default="accurate",
+        help="Recognition level",
+    )
+    parser.add_argument(
+        "--languages",
+        "-lang",
+        type=str,
+        default="en-US",
+        help="Comma-separated BCP-47 codes",
+    )
+    parser.add_argument(
+        "--no-correction", action="store_true", help="Disable language correction"
+    )
+    parser.add_argument(
+        "--handwriting",
+        action="store_true",
+        help="Use handwriting-optimized mode (iOS 16+)",
+    )
+    parser.add_argument("--output", "-o", type=Path, default=None, help="Save to file")
+    parser.add_argument("--separator", type=str, default="\n\n", help="Page separator")
+    parser.add_argument(
+        "--confidence", action="store_true", help="Show confidence per page"
+    )
+    parser.add_argument(
+        "--scale",
+        type=float,
+        default=PDF_RENDER_SCALE_DEFAULT,
+        help=f"Render scale factor (default: {PDF_RENDER_SCALE_DEFAULT})",
+    )
+    parser.add_argument(
+        "--jobs",
+        "-j",
+        type=int,
+        default=1,
+        help="Number of parallel workers (default: 1, use 0 for CPU count)",
+    )
     return parser
 
 
@@ -184,13 +217,41 @@ def main():
     print(f"Will process pages: {pages}")
     print(f"Render scale: {args.scale}x")
 
-    all_texts, all_confs = [], []
-    for p in pages:
-        text, conf = process_page(pdf_url, p, len(pages), args, revision)
-        all_texts.append(text)
-        all_confs.append(conf)
+    # Determine worker count
+    max_workers = args.jobs
+    if max_workers <= 0:
+        import os
 
-    write_output(args, all_texts, all_confs)
+        max_workers = os.cpu_count() or 4
+
+    # Use thread pool for parallel page processing
+    all_texts = [None] * len(pages)  # pre-allocate to maintain order
+    all_confs = [0.0] * len(pages)
+
+    if max_workers > 1:
+        print(f"Using {max_workers} parallel workers")
+        with ThreadPoolExecutor(max_workers=max_workers) as executor:
+            future_to_idx = {
+                executor.submit(process_page, pdf_url, p, len(pages), args, revision): i
+                for i, p in enumerate(pages)
+            }
+            for future in as_completed(future_to_idx):
+                idx = future_to_idx[future]
+                try:
+                    text, conf = future.result()
+                    all_texts[idx] = text
+                    all_confs[idx] = conf
+                except Exception as e:
+                    print(f"Error on page {pages[idx]}: {e}")
+                    all_texts[idx] = f"[Error: page {pages[idx]} failed]"
+                    all_confs[idx] = 0.0
+    else:
+        for i, p in enumerate(pages):
+            text, conf = process_page(pdf_url, p, len(pages), args, revision)
+            all_texts[i] = text
+            all_confs[i] = conf
+
+    write_output(args, all_texts, list(all_confs))
 
 
 if __name__ == "__main__":

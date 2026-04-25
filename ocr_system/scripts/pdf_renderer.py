@@ -7,6 +7,8 @@ Renders PDF pages to CGImage objects and queries page metadata.
 
 from __future__ import annotations
 
+from typing import Optional, Tuple
+
 from ocr_system.infrastructure.constants import (
     PDF_FALLBACK_PAGE_COUNT,
     PDF_RENDER_SCALE_DEFAULT,
@@ -31,23 +33,37 @@ try:
         CGContextFillRect,
         CGContextDrawPDFPage,
         CGImageAlphaInfo,
-        CGImageSourceCreateWithURL,
-        CGImageSourceGetCount,
     )
     from Quartz import (
         CGRectMake,
         CGContextConcatCTM,
         CGAffineTransformMakeScale,
     )
+
     VISION_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import required frameworks: {e}")
     VISION_AVAILABLE = False
 
+# Simple in-memory PDF document cache
+_pdf_document_cache = {}
+
+
+def _get_pdf_document(pdf_url):
+    """Get cached CGPDFDocument or create new one."""
+    # Use string representation as cache key (NSURL string value)
+    cache_key = str(pdf_url)
+    if cache_key not in _pdf_document_cache:
+        doc = CGPDFDocumentCreateWithURL(pdf_url)
+        if doc is None:
+            return None
+        _pdf_document_cache[cache_key] = doc
+    return _pdf_document_cache[cache_key]
+
 
 def _get_page_dimensions(pdf_url, page_num: int, scale: float):
     """Get scaled page dimensions, or None if invalid."""
-    pdf = CGPDFDocumentCreateWithURL(pdf_url)
+    pdf = _get_pdf_document(pdf_url)
     if pdf is None:
         print("  Error: Could not open PDF")
         return None, None, None
@@ -83,14 +99,16 @@ def _create_bitmap_context(width: int, height: int):
     )
 
 
-def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = PDF_RENDER_SCALE_DEFAULT):
+def render_pdf_page_to_cgimage(
+    pdf_url, page_num: int, scale: float = PDF_RENDER_SCALE_DEFAULT
+):
     """
     Render a single PDF page to CGImage.
 
     Args:
         pdf_url: NSURL to PDF file
         page_num: 1-based page number
-        scale: Scale factor for rendering (2.0 = 2x resolution)
+        scale: Scale factor for rendering
 
     Returns:
         CGImage object or None
@@ -117,10 +135,8 @@ def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = PDF_RENDER
 
 def get_page_count(pdf_url) -> int:
     """Get total page count from PDF, with fallback."""
-    source = CGImageSourceCreateWithURL(pdf_url, None)
-    if source:
-        total = CGImageSourceGetCount(source)
-        print(f"PDF: {total} page(s)")
-        return total
-    print("Warning: Could not get page count via CGImageSource")
-    return PDF_FALLBACK_PAGE_COUNT
+    pdf = _get_pdf_document(pdf_url)
+    if pdf is None:
+        return PDF_FALLBACK_PAGE_COUNT
+    count = CGPDFDocumentGetNumberOfPages(pdf)
+    return count if count > 0 else PDF_FALLBACK_PAGE_COUNT
