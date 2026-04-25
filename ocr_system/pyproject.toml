@@ -1,0 +1,58 @@
+[build-system]
+requires = ["setuptools>=61.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "ocr-system"
+version = "0.1.0"
+description = "OCR system following Domain-Driven Design and Hexagonal Architecture"
+readme = "README.md"
+requires-python = ">=3.9"
+license = {text = "MIT"}
+authors = [
+    {name = "Your Name", email = "you@example.com"}
+]
+keywords = ["ocr", "vision", "ddd", "hexagonal-architecture"]
+
+dependencies = [
+    "aiohttp>=3.8.0",  # for HTTP image fetching
+    # Note: Vision and CoreML are system frameworks on macOS/iOS, not PyPI packages
+    # They are accessed via PyObjC bridge
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=7.0.0",
+    "pytest-asyncio>=0.21.0",
+    "mypy>=1.0.0",
+    "black>=23.0.0",
+    "ruff>=0.1.0",
+]
+
+[tool.setuptools.packages.find]
+where = ["."]
+include = ["ocr_system*"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+testpaths = ["tests"]
+
+[tool.mypy]
+python_version = "3.9"
+warn_return_any = true
+warn_unused_configs = true
+disallow_untyped_defs = true
+disallow_incomplete_defs = true
+
+[[tool.mypy.overrides]]
+module = "ocr_system.infrastructure.*"
+ignore_errors = true  # ignore missing Vision/CoreML modules
+
+[tool.ruff]
+target-version = "py39"
+line-length = 88
+select = ["E", "F", "B", "I", "N", "UP", "PL", "RUF"]
+
+[tool.black]
+line-length = 88
+target-version = ["py39"]
