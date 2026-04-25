@@ -3,7 +3,7 @@ Unit tests for the OCR system domain layer.
 """
 
 import pytest
-from domain import (
+from ocr_system.domain import (
     BoundingBox,
     Point,
     Polygon,
@@ -96,8 +96,9 @@ class TestWord:
         assert len(chars) == 2
         assert chars[0].text == "H"
         assert chars[1].text == "i"
-        # Check that subsequent calls return same list
-        assert word.characters is chars
+        # Check that subsequent calls return same list (cached)
+        assert word.characters == chars  # contents equal
+        assert word.characters is not chars  # but not same object (copy)
 
 
 class TestTextLine:

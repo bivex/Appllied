@@ -44,18 +44,40 @@ def load_image_cgimage(image_path: Path) -> Optional[object]:
         from Quartz import (
             CGImageSourceCreateWithData,
             CGImageSourceCreateImageAtIndex,
-            kCGImageTypeIdentifierPNG,
         )
-        from Foundation import NSData, NSURL
+        from Foundation import NSData
 
         # Read file data
         data = NSData.dataWithContentsOfFile_(str(image_path))
+        if data is None:
+            print(f"Error: Could not read file {image_path}")
+            return None
 
-        # Create image source
-        source = CGImageSourceCreateWithData(data, None)
+        # Create image source with options
+        # kCGImageSourceShouldCache = True (default)
+        options = None
+        source = CGImageSourceCreateWithData(data, options)
         if source is None:
             print(f"Error: Could not create image source from {image_path}")
             return None
+
+        # Get first image (index 0)
+        # Options: None for default behavior
+        cg_image = CGImageSourceCreateImageAtIndex(source, 0, None)
+        if cg_image is None:
+            print(f"Error: Could not decode image from {image_path}")
+            return None
+
+        return cg_image
+
+    except ImportError as e:
+        print(
+            f"Error: Quartz framework not available ({e}). This script must run on macOS with PyObjC."
+        )
+        return None
+    except Exception as e:
+        print(f"Error loading image: {e}")
+        return None
 
         # Get first image
         cg_image = CGImageSourceCreateImageAtIndex(source, 0, None)
