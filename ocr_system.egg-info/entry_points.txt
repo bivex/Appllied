@@ -1,0 +1,4 @@
+[console_scripts]
+ocr-extract = ocr_system.scripts.extract_text:main
+ocr-extract-pdf = ocr_system.scripts.extract_text_from_pdf:main
+ocr-generate = ocr_system.scripts.generate_text_images:main

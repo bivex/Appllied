@@ -37,11 +37,10 @@ ocr-extract-pdf = "ocr_system.scripts.extract_text_from_pdf:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
-include = ["ocr_system*"]
 
 [tool.pytest.ini_options]
 asyncio_mode = "auto"
-testpaths = ["tests"]
+testpaths = ["ocr_system/tests"]
 
 [tool.mypy]
 python_version = "3.9"

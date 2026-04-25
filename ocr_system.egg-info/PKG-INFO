@@ -1,3 +1,21 @@
+Metadata-Version: 2.4
+Name: ocr-system
+Version: 0.1.0
+Summary: OCR system following Domain-Driven Design and Hexagonal Architecture
+Author-email: Your Name <you@example.com>
+License: MIT
+Keywords: ocr,vision,ddd,hexagonal-architecture
+Requires-Python: >=3.9
+Description-Content-Type: text/markdown
+Requires-Dist: aiohttp>=3.8.0
+Requires-Dist: Pillow>=9.0.0
+Provides-Extra: dev
+Requires-Dist: pytest>=7.0.0; extra == "dev"
+Requires-Dist: pytest-asyncio>=0.21.0; extra == "dev"
+Requires-Dist: mypy>=1.0.0; extra == "dev"
+Requires-Dist: black>=23.0.0; extra == "dev"
+Requires-Dist: ruff>=0.1.0; extra == "dev"
+
 # OCR System
 
 A modern OCR system implementing Domain-Driven Design (DDD) and Hexagonal Architecture (Ports & Adapters), inspired by Apple's Vision framework design principles.
