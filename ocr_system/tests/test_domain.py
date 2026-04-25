@@ -2,23 +2,22 @@
 Unit tests for the OCR system domain layer.
 """
 
+import datetime
+
 import pytest
 from ocr_system.domain import (
     BoundingBox,
     Point,
     Polygon,
     Language,
-    TextRange,
     Character,
     Word,
     TextLine,
     Document,
     Paragraph,
     Table,
-    Entity,
     DocumentType,
     OCRPath,
-    EntityType,
     DomainEvent,
     OCRRequested,
     OCREngineSelected,
@@ -28,11 +27,27 @@ from ocr_system.domain import (
     OCRAggregate,
 )
 
+# Test constants — named for clarity
+CONF_HIGH = 0.95
+CONF_ABOVE = 0.9
+CONF_MID = 0.88
+CONF_BELOW = 0.85
+CONF_LOWER = 0.8
+
+BBOX_SMALL_SIZE = 10
+BBOX_MEDIUM_WIDTH = 20
+BBOX_MEDIUM_HEIGHT = 10
+BBOX_LARGE_WIDTH = 50
+BBOX_LINE_WIDTH = 100
+BBOX_LINE_HEIGHT = 20
+BBOX_PARAGRAPH_WIDTH = 100
+BBOX_PARAGRAPH_HEIGHT = 50
+
 
 class TestBoundingBox:
     def test_intersect(self):
-        a = BoundingBox(0, 0, 10, 10, 0.9)
-        b = BoundingBox(5, 5, 10, 10, 0.8)
+        a = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE, CONF_ABOVE)
+        b = BoundingBox(5, 5, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE, CONF_LOWER)
         inter = a.intersect(b)
         assert inter is not None
         assert inter.x == 5
@@ -42,15 +57,15 @@ class TestBoundingBox:
         assert inter.confidence == min(a.confidence, b.confidence)
 
     def test_intersect_none(self):
-        a = BoundingBox(0, 0, 10, 10)
-        b = BoundingBox(20, 20, 10, 10)
+        a = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
+        b = BoundingBox(20, 20, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert a.intersect(b) is None
 
     def test_iou(self):
-        a = BoundingBox(0, 0, 10, 10)
-        b = BoundingBox(0, 0, 10, 10)
+        a = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
+        b = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert a.iou(b) == 1.0
-        c = BoundingBox(20, 20, 10, 10)
+        c = BoundingBox(20, 20, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert a.iou(c) == 0.0
 
     def test_area(self):
@@ -58,18 +73,18 @@ class TestBoundingBox:
         assert b.area == 12
 
     def test_center(self):
-        b = BoundingBox(0, 0, 10, 10)
+        b = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert b.center == (5.0, 5.0)
 
 
 class TestPolygon:
     def test_bounding_box(self):
-        points = [Point(0, 0), Point(10, 0), Point(10, 5), Point(0, 5)]
+        points = [Point(0, 0), Point(BBOX_SMALL_SIZE, 0), Point(BBOX_SMALL_SIZE, 5), Point(0, 5)]
         poly = Polygon(points)
         bbox = poly.bounding_box()
         assert bbox.x == 0
         assert bbox.y == 0
-        assert bbox.width == 10
+        assert bbox.width == BBOX_SMALL_SIZE
         assert bbox.height == 5
 
 
@@ -84,40 +99,39 @@ class TestLanguage:
 
 class TestCharacter:
     def test_creation(self):
-        char = Character("A", BoundingBox(0, 0, 1, 1), 0.95)
+        char = Character("A", BoundingBox(0, 0, 1, 1), CONF_HIGH)
         assert char.text == "A"
-        assert char.confidence == pytest.approx(0.95)
+        assert char.confidence == pytest.approx(CONF_HIGH)
 
 
 class TestWord:
     def test_split_into_characters(self):
-        word = Word("Hi", BoundingBox(0, 0, 20, 10), 0.9)
+        word = Word("Hi", BoundingBox(0, 0, BBOX_MEDIUM_WIDTH, BBOX_MEDIUM_HEIGHT), CONF_ABOVE)
         chars = word.split_into_characters()
         assert len(chars) == 2
         assert chars[0].text == "H"
         assert chars[1].text == "i"
-        # Check that subsequent calls return same list (cached)
-        assert word.characters == chars  # contents equal
-        assert word.characters is not chars  # but not same object (copy)
+        assert word.characters == chars
+        assert word.characters is not chars
 
 
 class TestTextLine:
     def test_split_into_words(self):
-        line = TextLine("Hello World", BoundingBox(0, 0, 100, 20), 0.85)
+        line = TextLine("Hello World", BoundingBox(0, 0, BBOX_LINE_WIDTH, BBOX_LINE_HEIGHT), CONF_BELOW)
         words = line.split_into_words()
         assert len(words) == 2
         assert words[0].text == "Hello"
         assert words[1].text == "World"
 
     def test_add_word(self):
-        line = TextLine("Test", BoundingBox(0, 0, 50, 10), 0.9)
-        word = Word("Test", BoundingBox(0, 0, 50, 10), 0.9)
+        line = TextLine("Test", BoundingBox(0, 0, BBOX_LARGE_WIDTH, BBOX_MEDIUM_HEIGHT), CONF_ABOVE)
+        word = Word("Test", BoundingBox(0, 0, BBOX_LARGE_WIDTH, BBOX_MEDIUM_HEIGHT), CONF_ABOVE)
         line.add_word(word)
         assert len(line.words) == 1
         assert line.words[0] is word
 
     def test_language_property(self):
-        line = TextLine("Bonjour", BoundingBox(0, 0, 50, 10), 0.9)
+        line = TextLine("Bonjour", BoundingBox(0, 0, BBOX_LARGE_WIDTH, BBOX_MEDIUM_HEIGHT), CONF_ABOVE)
         lang = Language("fr")
         line.language = lang
         assert line.language == lang
@@ -126,14 +140,15 @@ class TestTextLine:
 class TestDocument:
     def test_add_line(self):
         doc = Document("img.png", DocumentType.GENERIC)
-        line = TextLine("Hello", BoundingBox(0, 0, 10, 10), 0.9)
+        line = TextLine("Hello", BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
         doc.add_line(line)
         assert len(doc.lines) == 1
 
     def test_add_paragraph(self):
         doc = Document("img.png", DocumentType.GENERIC)
         para = Paragraph(
-            lines=[], bounding_box=BoundingBox(0, 0, 100, 50), reading_order=1
+            lines=[], bounding_box=BoundingBox(0, 0, BBOX_PARAGRAPH_WIDTH, BBOX_PARAGRAPH_HEIGHT),
+            reading_order=1,
         )
         doc.add_paragraph(para)
         assert len(doc.paragraphs) == 1
@@ -141,8 +156,8 @@ class TestDocument:
     def test_add_table(self):
         doc = Document("img.png", DocumentType.GENERIC)
         table = Table(
-            rows=[[TextLine("Cell", BoundingBox(0, 0, 10, 10), 0.9)]],
-            bounding_box=BoundingBox(0, 0, 100, 100),
+            rows=[[TextLine("Cell", BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)]],
+            bounding_box=BoundingBox(0, 0, BBOX_PARAGRAPH_WIDTH, BBOX_PARAGRAPH_WIDTH),
             columns=1,
         )
         doc.add_table(table)
@@ -150,19 +165,17 @@ class TestDocument:
 
     def test_get_full_text(self):
         doc = Document("img.png", DocumentType.GENERIC)
-        line1 = TextLine("Line1", BoundingBox(0, 0, 10, 10), 0.9)
-        line2 = TextLine("Line2", BoundingBox(0, 20, 10, 10), 0.9)
+        line1 = TextLine("Line1", BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
+        line2 = TextLine("Line2", BoundingBox(0, 20, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
         doc.add_line(line1)
         doc.add_line(line2)
         assert doc.get_full_text() == "Line1\nLine2"
 
     def test_mark_processed(self):
-        import datetime
-
         doc = Document("img.png", DocumentType.GENERIC)
-        before = datetime.datetime.utcnow()
+        before = datetime.datetime.now(datetime.timezone.utc)
         doc.mark_processed()
-        after = datetime.datetime.utcnow()
+        after = datetime.datetime.now(datetime.timezone.utc)
         assert doc.processed_at is not None
         assert before <= doc.processed_at <= after
 
@@ -193,7 +206,7 @@ class TestDomainEvents:
         e2 = OCREngineSelected(doc.id, OCRPath.FAST, "small image")
         assert e2.path == OCRPath.FAST
 
-        e3 = TextRecognized(doc.id, 10, 0.88)
+        e3 = TextRecognized(doc.id, 10, CONF_MID)
         assert e3.lines == 10
 
         e4 = LanguageCorrected(doc.id, 5)

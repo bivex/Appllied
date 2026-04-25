@@ -12,6 +12,18 @@ import sys
 from pathlib import Path
 from typing import List, Optional, Tuple
 
+from ocr_system.infrastructure.constants import (
+    OCR_TOP_CANDIDATES_COUNT,
+    OCR_CONFIDENCE_FALLBACK,
+    OUTPUT_SEPARATOR_WIDTH,
+    PDF_FALLBACK_PAGE_COUNT,
+    PDF_RENDER_SCALE_DEFAULT,
+    QUARTZ_BITMAP_INFO_PREMULTIPLIED_FIRST_LITTLE_ENDIAN,
+    QUARTZ_BITS_PER_COMPONENT,
+    QUARTZ_BYTES_PER_ROW_AUTO,
+    QUARTZ_WHITE_FILL,
+)
+
 # Check Vision availability
 try:
     import Vision
@@ -30,6 +42,11 @@ try:
         CGContextDrawPDFPage,
         CGImageAlphaInfo,
     )
+    from Quartz import (
+        CGRectMake,
+        CGContextConcatCTM,
+        CGAffineTransformMakeScale,
+    )
     from Foundation import NSURL
     VISION_AVAILABLE = True
 except ImportError as e:
@@ -37,7 +54,7 @@ except ImportError as e:
     VISION_AVAILABLE = False
 
 
-def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = 2.0):
+def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = PDF_RENDER_SCALE_DEFAULT):
     """
     Render a single PDF page to CGImage.
 
@@ -49,19 +66,16 @@ def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = 2.0):
     Returns:
         CGImage object or None
     """
-    # Create PDF document
     pdf = CGPDFDocumentCreateWithURL(pdf_url)
     if pdf is None:
-        print(f"  Error: Could not open PDF")
+        print("  Error: Could not open PDF")
         return None
 
-    # Get page
     page = CGPDFDocumentGetPage(pdf, page_num)
     if page is None:
         print(f"  Error: Could not get page {page_num}")
         return None
 
-    # Get page rect
     rect = CGPDFPageGetBoxRect(page, kCGPDFMediaBox)
     width = int(rect.size.width * scale)
     height = int(rect.size.height * scale)
@@ -72,43 +86,30 @@ def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = 2.0):
 
     print(f"  Rendering at {width}x{height} (scale {scale}x)")
 
-    # Create bitmap context
     color_space = CGColorSpaceCreateDeviceRGB()
-
-    # Bitmap info: RGBA, premultiplied alpha, little-endian
-    # CGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little
-    bitmap_info = 1 | 0x2000  # kCGImageAlphaPremultipliedFirst | kCGBitmapByteOrder32Little
-
     context = CGBitmapContextCreate(
-        None,      # data (NULL = let Quartz allocate)
+        None,
         width,
         height,
-        8,         # bits per component
-        0,         # bytes per row (0 = auto)
+        QUARTZ_BITS_PER_COMPONENT,
+        QUARTZ_BYTES_PER_ROW_AUTO,
         color_space,
-        bitmap_info
+        QUARTZ_BITMAP_INFO_PREMULTIPLIED_FIRST_LITTLE_ENDIAN,
     )
 
     if context is None:
-        print(f"  Error: Could not create bitmap context")
+        print("  Error: Could not create bitmap context")
         return None
 
-    # Fill ENTIRE context with white (not just the unscaled page rect)
-    from Quartz import CGRectMake
     full_rect = CGRectMake(0, 0, width, height)
-    CGContextSetRGBFillColor(context, 1.0, 1.0, 1.0, 1.0)
+    CGContextSetRGBFillColor(context, *QUARTZ_WHITE_FILL)
     CGContextFillRect(context, full_rect)
 
-    # Apply scale transform then draw PDF page
-    from Quartz import CGContextConcatCTM, CGAffineTransformMakeScale
     transform = CGAffineTransformMakeScale(scale, scale)
     CGContextConcatCTM(context, transform)
-
     CGContextDrawPDFPage(context, page)
 
-    # Extract CGImage
-    cg_image = CGBitmapContextCreateImage(context)
-    return cg_image
+    return CGBitmapContextCreateImage(context)
 
 
 def recognize_text_from_cgimage(
@@ -158,17 +159,15 @@ def recognize_text_from_cgimage(
 
     for obs in observations:
         if hasattr(obs, "topCandidates_"):
-            candidates = obs.topCandidates_(1)
+            candidates = obs.topCandidates_(OCR_TOP_CANDIDATES_COUNT)
             if candidates and len(candidates) > 0:
                 candidate = candidates[0]
-                text = candidate.string()
-                conf = candidate.confidence()
-                texts.append(text)
-                total_conf += conf
+                texts.append(candidate.string())
+                total_conf += candidate.confidence()
                 count += 1
         elif hasattr(obs, "string"):
             texts.append(obs.string())
-            total_conf += 0.5
+            total_conf += OCR_CONFIDENCE_FALLBACK
             count += 1
 
     avg_conf = total_conf / count if count > 0 else 0.0
@@ -186,6 +185,82 @@ def parse_page_range(s: str) -> List[int]:
         else:
             pages.add(int(part))
     return sorted(pages)
+
+
+def resolve_pages(args) -> List[int]:
+    """Determine which pages to process from CLI arguments."""
+    if args.pages:
+        if args.pages.lower() == "all":
+            return None
+        try:
+            return parse_page_range(args.pages)
+        except ValueError as e:
+            print(f"Error: {e}")
+            sys.exit(1)
+    return None
+
+
+def get_page_count(pdf_url) -> int:
+    """Get total page count from PDF, with fallback."""
+    from Quartz import CGImageSourceCreateWithURL, CGImageSourceGetCount
+    source = CGImageSourceCreateWithURL(pdf_url, None)
+    if source:
+        total = CGImageSourceGetCount(source)
+        print(f"PDF: {total} page(s)")
+        return total
+    print("Warning: Could not get page count via CGImageSource")
+    return PDF_FALLBACK_PAGE_COUNT
+
+
+def process_page(pdf_url, page_num: int, total: int, args, revision) -> Tuple[str, float]:
+    """Render and OCR a single page, returning (text, confidence)."""
+    print(f"\nPage {page_num}/{total}...", flush=True)
+    cg_img = render_pdf_page_to_cgimage(pdf_url, page_num, scale=args.scale)
+    if cg_img is None:
+        print(f"  Failed to render page {page_num}")
+        return f"[Error: page {page_num} could not be rendered]", 0.0
+
+    print("  Running Vision OCR...", flush=True)
+    try:
+        texts, conf = recognize_text_from_cgimage(
+            cg_img,
+            recognition_level=args.level,
+            languages=[lang.strip() for lang in args.languages.split(",")],
+            use_language_correction=not args.no_correction,
+            revision=revision,
+        )
+        print(f"  {len(texts)} lines, avg conf: {conf:.2%}")
+        return "\n".join(texts), conf
+    except Exception as e:
+        print(f"  OCR failed: {e}")
+        return f"[Error: OCR failed on page {page_num}]", 0.0
+
+
+def write_output(args, all_texts: List[str], all_confs: List[float]) -> None:
+    """Write results to file and console."""
+    full_text = args.separator.join(all_texts)
+    out_path = args.output or args.pdf.with_suffix(".txt")
+    out_path.write_text(full_text, encoding="utf-8")
+    print(f"\nSaved to: {out_path}")
+
+    separator = "=" * OUTPUT_SEPARATOR_WIDTH
+    print(f"\n{separator}")
+    print("EXTRACTED TEXT")
+    print(separator)
+    if args.confidence:
+        for i, (txt, conf) in enumerate(zip(all_texts, all_confs), 1):
+            print(f"\n--- Page {i} [{conf:.2%}] ---")
+            print(txt)
+    else:
+        print(full_text)
+    print(separator)
+
+    valid_confs = [c for c in all_confs if c > 0]
+    if valid_confs:
+        avg = sum(valid_confs) / len(valid_confs)
+        print(f"\nPages processed: {len(valid_confs)}/{len(all_texts)}")
+        print(f"Overall confidence: {avg:.2%}")
+        print(f"Total characters: {len(full_text)}")
 
 
 def main():
@@ -209,8 +284,8 @@ def main():
                         help="Page separator")
     parser.add_argument("--confidence", action="store_true",
                         help="Show confidence per page")
-    parser.add_argument("--scale", type=float, default=2.0,
-                        help="Render scale factor (default: 2.0)")
+    parser.add_argument("--scale", type=float, default=PDF_RENDER_SCALE_DEFAULT,
+                        help=f"Render scale factor (default: {PDF_RENDER_SCALE_DEFAULT})")
 
     args = parser.parse_args()
 
@@ -224,23 +299,8 @@ def main():
         print(f"Error: PDF not found: {args.pdf}")
         sys.exit(1)
 
-    # Parse pages
-    if args.pages:
-        if args.pages.lower() == "all":
-            page_range = None
-        else:
-            try:
-                page_range = parse_page_range(args.pages)
-            except ValueError as e:
-                print(f"Error: {e}")
-                sys.exit(1)
-    else:
-        page_range = None
+    page_range = resolve_pages(args)
 
-    # Languages
-    langs = [l.strip() for l in args.languages.split(",")]
-
-    # Revision for handwriting
     revision = None
     if args.handwriting:
         try:
@@ -248,90 +308,22 @@ def main():
         except AttributeError:
             print("Warning: Revision 3 not available (requires macOS 13+)")
 
-    # Create URL
     pdf_url = NSURL.fileURLWithPath_(str(args.pdf.absolute()))
+    total_pages = get_page_count(pdf_url)
 
-    # Get page count (for info)
-    from Quartz import CGImageSourceCreateWithURL, CGImageSourceGetCount
-    source = CGImageSourceCreateWithURL(pdf_url, None)
-    if source:
-        total_pages = CGImageSourceGetCount(source)
-        print(f"PDF: {total_pages} page(s)")
-    else:
-        print("Warning: Could not get page count via CGImageSource")
-        total_pages = 1  # fallback
-
-    # Determine which pages to process
-    if page_range is None:
-        pages = list(range(1, total_pages + 1))
-    else:
-        pages = [p for p in page_range if 1 <= p <= total_pages]
-
+    pages = list(range(1, total_pages + 1)) if page_range is None else [
+        p for p in page_range if 1 <= p <= total_pages
+    ]
     print(f"Will process pages: {pages}")
     print(f"Render scale: {args.scale}x")
 
-    # Process pages
-    all_texts = []
-    all_confs = []
-
+    all_texts, all_confs = [], []
     for p in pages:
-        print(f"\nPage {p}/{len(pages)}...", flush=True)
-        cg_img = render_pdf_page_to_cgimage(pdf_url, p, scale=args.scale)
-        if cg_img is None:
-            print(f"  Failed to render page {p}")
-            all_texts.append(f"[Error: page {p} could not be rendered]")
-            all_confs.append(0.0)
-            continue
+        text, conf = process_page(pdf_url, p, len(pages), args, revision)
+        all_texts.append(text)
+        all_confs.append(conf)
 
-        print(f"  Running Vision OCR...", flush=True)
-        try:
-            texts, conf = recognize_text_from_cgimage(
-                cg_img,
-                recognition_level=args.level,
-                languages=langs,
-                use_language_correction=not args.no_correction,
-                revision=revision,
-            )
-            page_text = "\n".join(texts)
-            all_texts.append(page_text)
-            all_confs.append(conf)
-            print(f"  ✓ {len(texts)} lines, avg conf: {conf:.2%}")
-        except Exception as e:
-            print(f"  ✗ OCR failed: {e}")
-            all_texts.append(f"[Error: OCR failed on page {p}]")
-            all_confs.append(0.0)
-
-    # Output
-    full_text = args.separator.join(all_texts)
-
-    # Determine output path: --output or auto-generate next to PDF
-    if args.output:
-        out_path = args.output
-    else:
-        out_path = args.pdf.with_suffix(".txt")
-
-    out_path.write_text(full_text, encoding="utf-8")
-    print(f"\nSaved to: {out_path}")
-
-    # Also print to console
-    print("\n" + "=" * 60)
-    print("EXTRACTED TEXT")
-    print("=" * 60)
-    if args.confidence:
-        for i, (txt, conf) in enumerate(zip(all_texts, all_confs), 1):
-            print(f"\n--- Page {i} [{conf:.2%}] ---")
-            print(txt)
-    else:
-        print(full_text)
-    print("=" * 60)
-
-    # Summary
-    valid_confs = [c for c in all_confs if c > 0]
-    if valid_confs:
-        avg = sum(valid_confs) / len(valid_confs)
-        print(f"\nPages processed: {len(valid_confs)}/{len(pages)}")
-        print(f"Overall confidence: {avg:.2%}")
-        print(f"Total characters: {len(full_text)}")
+    write_output(args, all_texts, all_confs)
 
 
 if __name__ == "__main__":

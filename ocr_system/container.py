@@ -7,9 +7,7 @@ Entry point for creating the application with all dependencies.
 
 from __future__ import annotations
 
-import asyncio
 from typing import Optional
-from pathlib import Path
 
 from ocr_system.domain import DocumentType, Language, OCRPath
 from ocr_system.application import (
@@ -30,6 +28,11 @@ from ocr_system.infrastructure import (
     InMemoryDocumentRepository,
     OCRConfig,
 )
+from ocr_system.infrastructure.constants import (
+    PATH_SELECTION_MEGAPIXEL_THRESHOLD,
+    PATH_SELECTION_TEXT_DENSITY_THRESHOLD,
+    PIXELS_PER_MEGAPIXEL,
+)
 
 
 class OCRContainer:
@@ -48,7 +51,8 @@ class OCRContainer:
         self.model_path = model_path
 
         self._ocr_engine: Optional[OCREngine] = None
-        self._image_source: Optional[ImageSource] = None
+        self._local_image_source: Optional[ImageSource] = None
+        self._http_image_source: Optional[ImageSource] = None
         self._document_repository: Optional[DocumentRepository] = None
         self._path_selector: Optional[PathSelectionStrategy] = None
 
@@ -67,14 +71,15 @@ class OCRContainer:
         return self._ocr_engine
 
     def get_image_source(self, source_type: str = "local") -> ImageSource:
-        if self._image_source is None:
-            if source_type == "http":
-                self._image_source = HttpImageSource()
-            else:
-                self._image_source = LocalFileImageSource(
-                    base_path=str(self.config.temp_directory)
-                )
-        return self._image_source
+        if source_type == "http":
+            if self._http_image_source is None:
+                self._http_image_source = HttpImageSource()
+            return self._http_image_source
+        if self._local_image_source is None:
+            self._local_image_source = LocalFileImageSource(
+                base_path=str(self.config.temp_directory)
+            )
+        return self._local_image_source
 
     def get_document_repository(self) -> DocumentRepository:
         if self._document_repository is None:
@@ -114,33 +119,7 @@ class SimplePathSelector(PathSelectionStrategy):
         language_hint: Optional["Language"] = None,
     ) -> OCRPath:
         width, height = image_size
-        megapixels = (width * height) / 1_000_000
-        if megapixels < 2.0 or estimated_text_density > 0.3:
+        megapixels = (width * height) / PIXELS_PER_MEGAPIXEL
+        if megapixels < PATH_SELECTION_MEGAPIXEL_THRESHOLD or estimated_text_density > PATH_SELECTION_TEXT_DENSITY_THRESHOLD:
             return OCRPath.FAST
         return OCRPath.ACCURATE
-
-
-# ===============================
-# Entry point
-# ===============================
-
-
-async def main():
-    """Example usage of the OCR system."""
-    container = OCRContainer()
-    process = container.create_process_document_use_case()
-
-    try:
-        document = await process.execute(
-            image_url="sample.png", document_type=DocumentType.GENERIC
-        )
-        print(f"Processed document {document.id}")
-        print(f"Full text:\n{document.get_full_text()}")
-        print(f"Paragraphs: {len(document.paragraphs)}")
-        print(f"Tables: {len(document.tables)}")
-    except Exception as e:
-        print(f"Error processing document: {e}")
-
-
-if __name__ == "__main__":
-    asyncio.run(main())

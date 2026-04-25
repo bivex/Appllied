@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from uuid import UUID, uuid4
 
 from .enums import OCRPath
@@ -11,7 +11,7 @@ from .enums import OCRPath
 class DomainEvent:
     def __init__(self):
         self._event_id = uuid4()
-        self._occurred_at = datetime.utcnow()
+        self._occurred_at = datetime.now(timezone.utc)
 
     @property
     def event_id(self) -> UUID:

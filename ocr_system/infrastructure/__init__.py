@@ -225,7 +225,7 @@ class VisionOCRAdapter(OCREngine):
                 curr_line.bounding_box.y
                 - (prev_line.bounding_box.y + prev_line.bounding_box.height)
             )
-        if gap < PARAGRAPH_VERTICAL_GAP_THRESHOLD:
+            if gap < PARAGRAPH_VERTICAL_GAP_THRESHOLD:
                 current_para_lines.append(curr_line)
             else:
                 # Create paragraph

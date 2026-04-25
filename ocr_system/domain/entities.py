@@ -2,7 +2,7 @@
 
 from __future__ import annotations
 
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Any, Dict, List, Optional
 from uuid import UUID, uuid4
 
@@ -303,7 +303,7 @@ class Document:
         self._paragraphs: List[Paragraph] = []
         self._tables: List[Table] = []
         self._metadata: Dict[str, Any] = {}
-        self._created_at = datetime.utcnow()
+        self._created_at = datetime.now(timezone.utc)
         self._processed_at: Optional[datetime] = None
 
     @property
@@ -352,7 +352,7 @@ class Document:
         self._tables.append(table)
 
     def mark_processed(self) -> None:
-        self._processed_at = datetime.utcnow()
+        self._processed_at = datetime.now(timezone.utc)
 
     def get_full_text(self) -> str:
         return "\n".join(line.text for line in self._lines)

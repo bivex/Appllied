@@ -6,9 +6,9 @@ from abc import ABC, abstractmethod
 from typing import List, Optional, Protocol
 from uuid import UUID
 
-from domain import Document, DocumentType
+from ocr_system.domain import Document, DocumentType
 from .dtos import OCRResult, LineResult, StructuredDocument
-from domain import BoundingBox, OCRPath, Language
+from ocr_system.domain import BoundingBox, OCRPath, Language
 
 
 class OCREngine(ABC):
