@@ -36,6 +36,32 @@ from domain import (
     Entity,
     EntityType,
 )
+from .constants import (
+    VISION_FAST_PROCESSING_TIME_MS,
+    VISION_ACCURATE_PROCESSING_TIME_MS,
+    VISION_BASE_CONFIDENCE_ACCURATE,
+    VISION_BASE_CONFIDENCE_FAST,
+    VISION_DEFAULT_X_POSITION,
+    VISION_DEFAULT_Y_POSITION,
+    VISION_DEFAULT_LINE_HEIGHT,
+    VISION_DEFAULT_LINE_WIDTH,
+    VISION_DEFAULT_LINE_HEIGHT_BBOX,
+    VISION_CONFIDENCE_VARIANCE,
+    PARAGRAPH_VERTICAL_GAP_THRESHOLD,
+    CUSTOM_MODEL_MOCK_PROCESSING_TIME_MS,
+    CUSTOM_MODEL_MOCK_CONFIDENCE_HIGH,
+    CUSTOM_MODEL_MOCK_CONFIDENCE_MEDIUM,
+    CUSTOM_MODEL_MOCK_CONFIDENCE_AVG,
+    CUSTOM_MODEL_MOCK_X_POSITION,
+    CUSTOM_MODEL_MOCK_Y_POSITION_LINE1,
+    CUSTOM_MODEL_MOCK_Y_POSITION_LINE2,
+    CUSTOM_MODEL_MOCK_LINE_WIDTH,
+    CUSTOM_MODEL_MOCK_LINE_HEIGHT,
+    CUSTOM_MODEL_MOCK_LINE2_WIDTH,
+    HTTP_DEFAULT_TIMEOUT_SECONDS,
+    HTTP_EXISTS_CHECK_TIMEOUT_SECONDS,
+    OCR_DEFAULT_MAX_IMAGE_SIZE_MB,
+)
 
 # ===============================
 # Vision Framework Adapter (macOS/iOS)
@@ -72,6 +98,7 @@ class VisionOCRAdapter(OCREngine):
         use_language_correction: bool = True,
         recognition_level: str = "accurate",
     ):
+        super().__init__()
         self.use_accurate = use_accurate
         self.use_language_correction = use_language_correction
         self.recognition_level = recognition_level
@@ -106,9 +133,14 @@ class VisionOCRAdapter(OCREngine):
             sum(line.confidence for line in lines) / len(lines) if lines else 0.0
         )
 
+        processing_time_ms = (
+            VISION_FAST_PROCESSING_TIME_MS
+            if path == OCRPath.FAST
+            else VISION_ACCURATE_PROCESSING_TIME_MS
+        )
         return OCRResult(
             lines=lines,
-            processing_time_ms=150 if path == OCRPath.FAST else 800,
+            processing_time_ms=processing_time_ms,
             average_confidence=avg_confidence,
         )
 
@@ -125,16 +157,22 @@ class VisionOCRAdapter(OCREngine):
         ]
 
         lines = []
-        base_conf = 0.95 if path == OCRPath.ACCURATE else 0.75
+        base_conf = (
+            VISION_BASE_CONFIDENCE_ACCURATE
+            if path == OCRPath.ACCURATE
+            else VISION_BASE_CONFIDENCE_FAST
+        )
 
         for i, text in enumerate(sample_lines):
             # Simulate bounding box (x, y, width, height)
             bbox = BoundingBox(
-                x=50,
-                y=50 + i * 30,
-                width=400,
-                height=25,
-                confidence=base_conf + random.uniform(-0.05, 0.05),
+                x=VISION_DEFAULT_X_POSITION,
+                y=VISION_DEFAULT_Y_POSITION + i * VISION_DEFAULT_LINE_HEIGHT,
+                width=VISION_DEFAULT_LINE_WIDTH,
+                height=VISION_DEFAULT_LINE_HEIGHT_BBOX,
+                confidence=base_conf + random.uniform(
+                    -VISION_CONFIDENCE_VARIANCE, VISION_CONFIDENCE_VARIANCE
+                ),
             )
             line = LineResult(text=text, bounding_box=bbox, confidence=bbox.confidence)
             lines.append(line)
@@ -187,7 +225,7 @@ class VisionOCRAdapter(OCREngine):
                 curr_line.bounding_box.y
                 - (prev_line.bounding_box.y + prev_line.bounding_box.height)
             )
-            if gap < 50:  # threshold
+        if gap < PARAGRAPH_VERTICAL_GAP_THRESHOLD:
                 current_para_lines.append(curr_line)
             else:
                 # Create paragraph
@@ -315,6 +353,7 @@ class CustomModelOCRAdapter(OCREngine):
     """
 
     def __init__(self, model_path: str, use_ane: bool = True):
+        super().__init__()
         self.model_path = model_path
         self.use_ane = use_ane
         self._model = None
@@ -365,16 +404,32 @@ class CustomModelOCRAdapter(OCREngine):
         lines = [
             LineResult(
                 text="Custom model result",
-                bounding_box=BoundingBox(50, 50, 300, 30, 0.88),
-                confidence=0.88,
+                bounding_box=BoundingBox(
+                    CUSTOM_MODEL_MOCK_X_POSITION,
+                    CUSTOM_MODEL_MOCK_Y_POSITION_LINE1,
+                    CUSTOM_MODEL_MOCK_LINE_WIDTH,
+                    CUSTOM_MODEL_MOCK_LINE_HEIGHT,
+                    CUSTOM_MODEL_MOCK_CONFIDENCE_HIGH,
+                ),
+                confidence=CUSTOM_MODEL_MOCK_CONFIDENCE_HIGH,
             ),
             LineResult(
                 text="ANE-optimized architecture",
-                bounding_box=BoundingBox(50, 100, 350, 30, 0.85),
-                confidence=0.85,
+                bounding_box=BoundingBox(
+                    CUSTOM_MODEL_MOCK_X_POSITION,
+                    CUSTOM_MODEL_MOCK_Y_POSITION_LINE2,
+                    CUSTOM_MODEL_MOCK_LINE2_WIDTH,
+                    CUSTOM_MODEL_MOCK_LINE_HEIGHT,
+                    CUSTOM_MODEL_MOCK_CONFIDENCE_MEDIUM,
+                ),
+                confidence=CUSTOM_MODEL_MOCK_CONFIDENCE_MEDIUM,
             ),
         ]
-        return OCRResult(lines=lines, processing_time_ms=200, average_confidence=0.865)
+        return OCRResult(
+            lines=lines,
+            processing_time_ms=CUSTOM_MODEL_MOCK_PROCESSING_TIME_MS,
+            average_confidence=CUSTOM_MODEL_MOCK_CONFIDENCE_AVG,
+        )
 
     def correct_language(self, text: str) -> tuple[str, int]:
         """Apply language correction."""
@@ -399,6 +454,7 @@ class LocalFileImageSource(ImageSource):
     """Adapter for reading images from local filesystem."""
 
     def __init__(self, base_path: str):
+        super().__init__()
         self.base_path = Path(base_path)
 
     async def get_image(self, image_url: str) -> bytes:
@@ -435,6 +491,7 @@ class InMemoryDocumentRepository(DocumentRepository):
     """In-memory repository for documents (for development/testing)."""
 
     def __init__(self):
+        super().__init__()
         self._documents: Dict[UUID, Document] = {}
 
     async def save(self, document: Document) -> None:
@@ -462,7 +519,8 @@ class InMemoryDocumentRepository(DocumentRepository):
 class HttpImageSource(ImageSource):
     """Adapter for fetching images via HTTP."""
 
-    def __init__(self, timeout_seconds: float = 30.0):
+    def __init__(self, timeout_seconds: float = HTTP_DEFAULT_TIMEOUT_SECONDS):
+        super().__init__()
         self.timeout = timeout_seconds
 
     async def get_image(self, image_url: str) -> bytes:
@@ -482,7 +540,7 @@ class HttpImageSource(ImageSource):
 
         try:
             async with aiohttp.ClientSession(
-                timeout=aiohttp.ClientTimeout(total=10)
+                timeout=aiohttp.ClientTimeout(total=HTTP_EXISTS_CHECK_TIMEOUT_SECONDS)
             ) as session:
                 async with session.head(image_url) as response:
                     return response.status == 200
@@ -503,7 +561,7 @@ class OCRConfig:
         default_path: OCRPath = OCRPath.ACCURATE,
         use_language_correction: bool = True,
         temp_directory: str = "/tmp/ocr",
-        max_image_size_mb: int = 20,
+        max_image_size_mb: int = OCR_DEFAULT_MAX_IMAGE_SIZE_MB,
         enable_structured_extraction: bool = True,
     ):
         self.default_path = default_path
@@ -526,7 +584,9 @@ class OCRConfig:
         use_correction = os.getenv("OCR_USE_CORRECTION", "true").lower() == "true"
 
         temp_dir = os.getenv("OCR_TEMP_DIR", "/tmp/ocr")
-        max_size = int(os.getenv("OCR_MAX_IMAGE_SIZE_MB", "20"))
+        max_size = int(
+            os.getenv("OCR_MAX_IMAGE_SIZE_MB", str(OCR_DEFAULT_MAX_IMAGE_SIZE_MB))
+        )
 
         return cls(
             default_path=default_path,
