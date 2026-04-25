@@ -18,22 +18,15 @@ from ocr_system.infrastructure.constants import (
 try:
     import Vision
     import CoreML
+    import objc
     VISION_AVAILABLE = True
 except ImportError as e:
     print(f"Warning: Could not import required frameworks: {e}")
     VISION_AVAILABLE = False
 
 
-def recognize_text_from_cgimage(
-    cg_image,
-    recognition_level: str = "accurate",
-    languages: List[str] = None,
-    use_language_correction: bool = True,
-    revision=None,
-) -> Tuple[List[str], float]:
-    """Perform OCR on CGImage using Vision."""
-    request = Vision.VNRecognizeTextRequest.alloc().init()
-
+def _configure_request(request, recognition_level: str, languages, use_language_correction: bool, revision):
+    """Apply recognition settings to a VNRecognizeTextRequest."""
     if recognition_level.lower() == "fast":
         request.setRecognitionLevel_(Vision.VNRequestTextRecognitionLevelFast)
     else:
@@ -48,11 +41,9 @@ def recognize_text_from_cgimage(
     if revision is not None and hasattr(request, "setRevision_"):
         request.setRevision_(revision)
 
-    handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(
-        cg_image, None
-    )
 
-    import objc
+def _perform_vision_request(handler, request) -> List:
+    """Execute a Vision request and return observations, raising on failure."""
     error = objc.NULL
     success = handler.performRequests_error_([request], error)
     if not success:
@@ -62,9 +53,11 @@ def recognize_text_from_cgimage(
             raise RuntimeError("Vision request failed")
 
     observations = request.results()
-    if not observations:
-        return [], 0.0
+    return observations if observations else []
 
+
+def _extract_text_from_observations(observations) -> Tuple[List[str], float]:
+    """Collect recognized text and compute average confidence."""
     texts = []
     total_conf = 0.0
     count = 0
@@ -73,9 +66,8 @@ def recognize_text_from_cgimage(
         if hasattr(obs, "topCandidates_"):
             candidates = obs.topCandidates_(OCR_TOP_CANDIDATES_COUNT)
             if candidates and len(candidates) > 0:
-                candidate = candidates[0]
-                texts.append(candidate.string())
-                total_conf += candidate.confidence()
+                texts.append(candidates[0].string())
+                total_conf += candidates[0].confidence()
                 count += 1
         elif hasattr(obs, "string"):
             texts.append(obs.string())
@@ -84,3 +76,25 @@ def recognize_text_from_cgimage(
 
     avg_conf = total_conf / count if count > 0 else 0.0
     return texts, avg_conf
+
+
+def recognize_text_from_cgimage(
+    cg_image,
+    recognition_level: str = "accurate",
+    languages: List[str] = None,
+    use_language_correction: bool = True,
+    revision=None,
+) -> Tuple[List[str], float]:
+    """Perform OCR on CGImage using Vision."""
+    request = Vision.VNRecognizeTextRequest.alloc().init()
+    _configure_request(request, recognition_level, languages, use_language_correction, revision)
+
+    handler = Vision.VNImageRequestHandler.alloc().initWithCGImage_options_(
+        cg_image, None
+    )
+
+    observations = _perform_vision_request(handler, request)
+    if not observations:
+        return [], 0.0
+
+    return _extract_text_from_observations(observations)

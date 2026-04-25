@@ -115,11 +115,7 @@ def _render_text(
     draw: ImageDraw.ImageDraw,
     text: str,
     font,
-    width: int,
-    height: int,
-    text_color: Tuple[int, int, int],
-    padding: int,
-    line_spacing: int,
+    options: TextImageOptions,
 ) -> None:
     """Render text onto a PIL Draw context, centered vertically and horizontally."""
     lines = text.split("\n")
@@ -128,15 +124,15 @@ def _render_text(
         bbox = draw.textbbox((0, 0), line, font=font)
         line_heights.append(bbox[3] - bbox[1])
 
-    total_text_height = sum(line_heights) + line_spacing * (len(lines) - 1)
-    y = padding + (height - total_text_height - 2 * padding) // 2
+    total_text_height = sum(line_heights) + options.line_spacing * (len(lines) - 1)
+    y = options.padding + (options.height - total_text_height - 2 * options.padding) // 2
 
     for i, line in enumerate(lines):
         bbox = draw.textbbox((0, 0), line, font=font)
         text_width = bbox[2] - bbox[0]
-        x = padding + (width - 2 * padding - text_width) // 2
-        draw.text((x, y), line, fill=text_color, font=font)
-        y += line_heights[i] + line_spacing
+        x = options.padding + (options.width - 2 * options.padding - text_width) // 2
+        draw.text((x, y), line, fill=options.text_color, font=font)
+        y += line_heights[i] + options.line_spacing
 
 
 def create_text_image(
@@ -159,11 +155,7 @@ def create_text_image(
     draw = ImageDraw.Draw(img)
     font = _load_font(options.font_size, options.font_path)
 
-    _render_text(
-        draw, text, font,
-        options.width, options.height,
-        options.text_color, options.padding, options.line_spacing,
-    )
+    _render_text(draw, text, font, options)
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     img.save(output_path)

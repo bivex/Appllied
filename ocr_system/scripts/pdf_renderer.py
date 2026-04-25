@@ -7,8 +7,6 @@ Renders PDF pages to CGImage objects and queries page metadata.
 
 from __future__ import annotations
 
-from typing import Optional
-
 from ocr_system.infrastructure.constants import (
     PDF_FALLBACK_PAGE_COUNT,
     PDF_RENDER_SCALE_DEFAULT,
@@ -47,6 +45,44 @@ except ImportError as e:
     VISION_AVAILABLE = False
 
 
+def _get_page_dimensions(pdf_url, page_num: int, scale: float):
+    """Get scaled page dimensions, or None if invalid."""
+    pdf = CGPDFDocumentCreateWithURL(pdf_url)
+    if pdf is None:
+        print("  Error: Could not open PDF")
+        return None, None, None
+
+    page = CGPDFDocumentGetPage(pdf, page_num)
+    if page is None:
+        print(f"  Error: Could not get page {page_num}")
+        return None, None, None
+
+    rect = CGPDFPageGetBoxRect(page, kCGPDFMediaBox)
+    width = int(rect.size.width * scale)
+    height = int(rect.size.height * scale)
+
+    if width <= 0 or height <= 0:
+        print(f"  Error: Invalid dimensions {width}x{height}")
+        return None, None, None
+
+    print(f"  Rendering at {width}x{height} (scale {scale}x)")
+    return width, height, page
+
+
+def _create_bitmap_context(width: int, height: int):
+    """Create a Quartz bitmap context for rendering."""
+    color_space = CGColorSpaceCreateDeviceRGB()
+    return CGBitmapContextCreate(
+        None,
+        width,
+        height,
+        QUARTZ_BITS_PER_COMPONENT,
+        QUARTZ_BYTES_PER_ROW_AUTO,
+        color_space,
+        QUARTZ_BITMAP_INFO_PREMULTIPLIED_FIRST_LITTLE_ENDIAN,
+    )
+
+
 def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = PDF_RENDER_SCALE_DEFAULT):
     """
     Render a single PDF page to CGImage.
@@ -59,37 +95,11 @@ def render_pdf_page_to_cgimage(pdf_url, page_num: int, scale: float = PDF_RENDER
     Returns:
         CGImage object or None
     """
-    pdf = CGPDFDocumentCreateWithURL(pdf_url)
-    if pdf is None:
-        print("  Error: Could not open PDF")
+    width, height, page = _get_page_dimensions(pdf_url, page_num, scale)
+    if width is None:
         return None
 
-    page = CGPDFDocumentGetPage(pdf, page_num)
-    if page is None:
-        print(f"  Error: Could not get page {page_num}")
-        return None
-
-    rect = CGPDFPageGetBoxRect(page, kCGPDFMediaBox)
-    width = int(rect.size.width * scale)
-    height = int(rect.size.height * scale)
-
-    if width <= 0 or height <= 0:
-        print(f"  Error: Invalid dimensions {width}x{height}")
-        return None
-
-    print(f"  Rendering at {width}x{height} (scale {scale}x)")
-
-    color_space = CGColorSpaceCreateDeviceRGB()
-    context = CGBitmapContextCreate(
-        None,
-        width,
-        height,
-        QUARTZ_BITS_PER_COMPONENT,
-        QUARTZ_BYTES_PER_ROW_AUTO,
-        color_space,
-        QUARTZ_BITMAP_INFO_PREMULTIPLIED_FIRST_LITTLE_ENDIAN,
-    )
-
+    context = _create_bitmap_context(width, height)
     if context is None:
         print("  Error: Could not create bitmap context")
         return None

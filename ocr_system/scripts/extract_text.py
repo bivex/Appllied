@@ -251,58 +251,45 @@ def _validate_and_prepare(args) -> Tuple[Path, Optional[Path]]:
 def _format_output(texts: List[str], avg_conf: float, show_confidence: bool) -> str:
     """Format recognized text lines into the output string."""
     if show_confidence:
-        output_lines = []
-        for text in texts:
-            output_lines.append(f"[{avg_conf:.2%}] {text}")
-        return "\n".join(output_lines)
+        return "\n".join(f"[{avg_conf:.2%}] {text}" for text in texts)
+    return "\n".join(texts)
+
+
+def _write_result(output: str, out_path, avg_conf: float, num_lines: int) -> None:
+    """Write OCR result to file or console."""
+    if out_path:
+        out_path.write_text(output)
+        print(f"Text saved to {out_path}")
     else:
-        return "\n".join(texts)
+        separator = "=" * OUTPUT_SEPARATOR_WIDTH
+        print(f"\nRecognized Text:\n{separator}\n{output}\n{separator}")
+        print(f"\nAverage confidence: {avg_conf:.2%}")
+        print(f"Lines detected: {num_lines}")
 
 
-def main():
+def _build_parser() -> argparse.ArgumentParser:
+    """Build argument parser for the OCR CLI."""
     parser = argparse.ArgumentParser(
         description="Extract text from images using Apple Vision OCR"
     )
     parser.add_argument("image", type=Path, help="Path to image file (PNG, JPG, etc.)")
-    parser.add_argument(
-        "--level",
-        "-l",
-        choices=["fast", "accurate"],
-        default="accurate",
-        help="Recognition level (default: accurate)",
-    )
-    parser.add_argument(
-        "--languages",
-        "-lang",
-        type=str,
-        default="en-US",
-        help="Comma-separated language codes (e.g. 'en-US,fr-FR')",
-    )
-    parser.add_argument(
-        "--no-correction", action="store_true", help="Disable language correction"
-    )
-    parser.add_argument(
-        "--handwriting",
-        action="store_true",
-        help="Enable handwriting-optimized mode (iOS 16+ revision 3)",
-    )
-    parser.add_argument(
-        "--no-fix-bg",
-        action="store_true",
-        help="Don't auto-fix transparent backgrounds (PencilKit images)",
-    )
-    parser.add_argument(
-        "--output",
-        "-o",
-        type=Path,
-        default=None,
-        help="Save extracted text to file instead of stdout",
-    )
-    parser.add_argument(
-        "--confidence", action="store_true", help="Show confidence scores"
-    )
+    parser.add_argument("--level", "-l", choices=["fast", "accurate"], default="accurate",
+                        help="Recognition level (default: accurate)")
+    parser.add_argument("--languages", "-lang", type=str, default="en-US",
+                        help="Comma-separated language codes (e.g. 'en-US,fr-FR')")
+    parser.add_argument("--no-correction", action="store_true", help="Disable language correction")
+    parser.add_argument("--handwriting", action="store_true",
+                        help="Enable handwriting-optimized mode (iOS 16+ revision 3)")
+    parser.add_argument("--no-fix-bg", action="store_true",
+                        help="Don't auto-fix transparent backgrounds (PencilKit images)")
+    parser.add_argument("--output", "-o", type=Path, default=None,
+                        help="Save extracted text to file instead of stdout")
+    parser.add_argument("--confidence", action="store_true", help="Show confidence scores")
+    return parser
 
-    args = parser.parse_args()
+
+def main():
+    args = _build_parser().parse_args()
 
     # Validate and prepare image
     image_path, to_delete = _validate_and_prepare(args)
@@ -321,9 +308,7 @@ def main():
         try:
             revision = Vision.VNRecognizeTextRequestRevision3
         except AttributeError:
-            print(
-                "Warning: VNRecognizeTextRequestRevision3 not available (requires iOS 16+/macOS 13+)"
-            )
+            print("Warning: VNRecognizeTextRequestRevision3 not available (requires iOS 16+/macOS 13+)")
 
     # Recognize
     try:
@@ -340,17 +325,7 @@ def main():
 
     # Format and write output
     output = _format_output(texts, avg_conf, args.confidence)
-
-    if args.output:
-        args.output.write_text(output)
-        print(f"Text saved to {args.output}")
-    else:
-        print("\nRecognized Text:")
-        print("=" * OUTPUT_SEPARATOR_WIDTH)
-        print(output)
-        print("=" * OUTPUT_SEPARATOR_WIDTH)
-        print(f"\nAverage confidence: {avg_conf:.2%}")
-        print(f"Lines detected: {len(texts)}")
+    _write_result(output, args.output, avg_conf, len(texts))
 
     # Cleanup temp file
     if to_delete and to_delete != args.image:

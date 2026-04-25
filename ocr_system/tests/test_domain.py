@@ -217,4 +217,4 @@ class TestDomainEvents:
         assert e4.corrections == 5
 
         e5 = OCRCompleted(doc.id, OCR_PROCESSING_TIME_MS)
-        assert e5.processing_time_ms == 150
+        assert e5.processing_time_ms == OCR_PROCESSING_TIME_MS
