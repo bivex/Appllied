@@ -5,7 +5,7 @@ from __future__ import annotations
 from abc import ABC, abstractmethod
 from typing import Optional
 
-from domain import Language, OCRPath
+from ..domain import Language, OCRPath
 
 from ocr_system.infrastructure.constants import (
     PATH_SELECTION_MEGAPIXEL_THRESHOLD,
@@ -58,8 +58,7 @@ class PathSelectionStrategy(ABC):
         image_size: tuple[int, int],
         estimated_text_density: float,
         language_hint: Optional[Language],
-    ) -> OCRPath:
-        ...
+    ) -> OCRPath: ...
 
     def estimate_processing_time(
         self, path: OCRPath, image_size: tuple[int, int]
@@ -71,7 +70,9 @@ class PathSelectionStrategy(ABC):
         if path == OCRPath.FAST:
             return pixels / PIXELS_PER_MEGAPIXEL * PROCESSING_TIME_PER_MEGAPIXEL_FAST
         else:
-            return pixels / PIXELS_PER_MEGAPIXEL * PROCESSING_TIME_PER_MEGAPIXEL_ACCURATE
+            return (
+                pixels / PIXELS_PER_MEGAPIXEL * PROCESSING_TIME_PER_MEGAPIXEL_ACCURATE
+            )
 
 
 class SimplePathSelectionStrategy(PathSelectionStrategy):
@@ -87,7 +88,10 @@ class SimplePathSelectionStrategy(PathSelectionStrategy):
         width, height = image_size
         megapixels = (width * height) / PIXELS_PER_MEGAPIXEL
 
-        if megapixels < PATH_SELECTION_MEGAPIXEL_THRESHOLD or estimated_text_density > PATH_SELECTION_TEXT_DENSITY_THRESHOLD:
+        if (
+            megapixels < PATH_SELECTION_MEGAPIXEL_THRESHOLD
+            or estimated_text_density > PATH_SELECTION_TEXT_DENSITY_THRESHOLD
+        ):
             return OCRPath.FAST
 
         # Use accurate path for larger images with sparse text

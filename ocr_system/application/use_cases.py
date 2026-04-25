@@ -5,7 +5,7 @@ from __future__ import annotations
 from typing import List, Optional
 from uuid import UUID
 
-from domain import (
+from ..domain import (
     Document,
     DocumentType,
     TextLine,
@@ -69,7 +69,11 @@ class ProcessDocumentUseCase:
         return await self.image_source.get_image(image_url)
 
     async def _perform_ocr(
-        self, image_data: bytes, path: OCRPath, aggregate: OCRAggregate, document: Document
+        self,
+        image_data: bytes,
+        path: OCRPath,
+        aggregate: OCRAggregate,
+        document: Document,
     ):
         """Run OCR recognition and build domain entities from results."""
         ocr_result = await self.ocr_engine.recognize(image_data, path)

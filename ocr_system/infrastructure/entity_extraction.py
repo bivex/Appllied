@@ -11,7 +11,7 @@ from __future__ import annotations
 import re
 from typing import List, Tuple
 
-from domain import (
+from ..domain import (
     TextLine,
     BoundingBox,
     Entity,
@@ -23,7 +23,10 @@ from domain import (
 _ENTITY_PATTERNS: List[Tuple[re.Pattern[str], EntityType]] = [
     (re.compile(r"[\w\.-]+@[\w\.-]+\.\w+"), EntityType.EMAIL),
     (re.compile(r"https?://[^\s]+"), EntityType.URL),
-    (re.compile(r"(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"), EntityType.PHONE),
+    (
+        re.compile(r"(\+?\d{1,3}[-.\s]?)?\(?\d{3}\)?[-.\s]?\d{3}[-.\s]?\d{4}"),
+        EntityType.PHONE,
+    ),
 ]
 
 

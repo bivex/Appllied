@@ -13,7 +13,7 @@ from pathlib import Path
 from typing import List, Optional, Dict
 from uuid import UUID
 
-from application import (
+from ..application import (
     OCREngine,
     OCRResult,
     LineResult,
@@ -21,7 +21,7 @@ from application import (
     DocumentRepository,
     ImageSource,
 )
-from domain import (
+from ..domain import (
     Document,
     DocumentType,
     TextLine,
@@ -164,7 +164,8 @@ class VisionOCRAdapter(OCREngine):
                 y=VISION_DEFAULT_Y_POSITION + i * VISION_DEFAULT_LINE_HEIGHT,
                 width=VISION_DEFAULT_LINE_WIDTH,
                 height=VISION_DEFAULT_LINE_HEIGHT_BBOX,
-                confidence=base_conf + random.uniform(
+                confidence=base_conf
+                + random.uniform(
                     -VISION_CONFIDENCE_VARIANCE, VISION_CONFIDENCE_VARIANCE
                 ),
             )
@@ -249,9 +250,7 @@ class VisionOCRAdapter(OCREngine):
                 current_para_lines = [curr_line]
 
         if current_para_lines:
-            paragraphs.append(
-                VisionOCRAdapter._create_paragraph(current_para_lines)
-            )
+            paragraphs.append(VisionOCRAdapter._create_paragraph(current_para_lines))
 
         return paragraphs
 
