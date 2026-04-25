@@ -16,6 +16,7 @@ keywords = ["ocr", "vision", "ddd", "hexagonal-architecture"]
 
 dependencies = [
     "aiohttp>=3.8.0",  # for HTTP image fetching
+    "Pillow>=9.0.0",   # for image generation
     # Note: Vision and CoreML are system frameworks on macOS/iOS, not PyPI packages
     # They are accessed via PyObjC bridge
 ]
@@ -28,6 +29,10 @@ dev = [
     "black>=23.0.0",
     "ruff>=0.1.0",
 ]
+
+[project.scripts]
+ocr-generate = "ocr_system.scripts.generate_text_images:main"
+ocr-extract = "ocr_system.scripts.extract_text:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

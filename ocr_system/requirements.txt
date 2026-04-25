@@ -1,9 +1,12 @@
 # Core dependencies
 # Vision and CoreML are system frameworks on macOS/iOS (accessed via PyObjC)
-# Install pyobjc if you need Vision support: pip install pyobjc
+# Install pyobjc if you need Vision support: pip install pyobjc-framework-Vision pyobjc-framework-CoreML
 
 # HTTP client for image fetching
 aiohttp>=3.8.0
+
+# Image generation for test data
+Pillow>=9.0.0
 
 # Development dependencies
 pytest>=7.0.0

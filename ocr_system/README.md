@@ -231,6 +231,101 @@ pytest --cov=ocr_system tests/
 - [ ] Distributed tracing and metrics (OpenTelemetry)
 - [ ] Graceful degradation: fallback to Tesseract if Vision unavailable
 
+## CLI Tools
+
+The `scripts/` directory provides command-line utilities:
+
+### Generate Test Images
+
+```bash
+# Generate 5 random text images
+python -m ocr_system.scripts.generate_text_images
+
+# Generate 20 images with custom text
+python -m ocr_system.scripts.generate_text_images --num 20 --output-dir ./data/train
+
+# Create single image with specific text
+python -m ocr_system.scripts.generate_text_images --text "Hello World" --font-size 48 --bg-color "white" --text-color "black"
+```
+
+Options:
+- `--num N`: Number of images to generate
+- `--output-dir DIR`: Output directory (default: `generated_images`)
+- `--text STR`: Specific text to render (single image)
+- `--width/--height`: Image dimensions
+- `--font-size`: Font size in points
+- `--font PATH`: Path to .ttf/.otf font file
+- `--bg-color/--text-color`: Color name or R,G,B (e.g., `255,255,255`)
+
+### Extract Text with Vision
+
+```bash
+# Extract text from image (requires macOS with Vision)
+python -m ocr_system.scripts.extract_text image.png
+
+# Use fast recognition (less accurate, faster)
+python -m ocr_system.scripts.extract_text image.png --level fast
+
+# Multiple languages
+python -m ocr_system.scripts.extract_text image.png --languages en-US,fr-FR
+
+# Handwriting-optimized (iOS 16+/macOS 13+)
+python -m ocr_system.scripts.extract_text image.png --handwriting
+
+# Save output to file
+python -m ocr_system.scripts.extract_text image.png --output text.txt
+
+# Show confidence scores
+python -m ocr_system.scripts.extract_text image.png --confidence
+```
+
+**Note**: The Vision-based extractor requires:
+- macOS (or iOS with appropriate bridge)
+- PyObjC: `pip install pyobjc-framework-Vision pyobjc-framework-CoreML`
+- For PencilKit images: automatically composites transparent backgrounds onto white (critical fix — see docs/PENCILKIT_VISION_FIX.md)
+
+### Programmatic Usage
+
+```python
+# Using the Python container (cross-platform, simulates Vision)
+from ocr_system.container import OCRContainer
+from ocr_system.domain import DocumentType
+
+async def main():
+    container = OCRContainer()
+    process = container.create_process_document_use_case()
+
+    document = await process.execute(
+        image_url="path/to/image.png",
+        document_type=DocumentType.GENERIC
+    )
+    print(document.get_full_text())
+
+# Using Vision adapter directly (macOS only)
+from ocr_system.infrastructure import VisionOCRAdapter
+
+async def main():
+    adapter = VisionOCRAdapter(use_accurate=True)
+    with open("image.png", "rb") as f:
+        image_data = f.read()
+    result = await adapter.recognize(image_data, OCRPath.ACCURATE)
+    for line in result.lines:
+        print(f"[{line.confidence:.2%}] {line.text}")
+```
+
+## Testing
+
+```bash
+# Run unit tests
+pytest tests/
+
+# Run with coverage
+pytest --cov=ocr_system tests/
+
+# Quick check
+python -m pytest tests/test_domain.py -v
+```
+
 ## License
 
 MIT
