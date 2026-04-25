@@ -16,6 +16,9 @@ from typing import List, Tuple
 from ocr_system.infrastructure.constants import (
     OUTPUT_SEPARATOR_WIDTH,
     PDF_RENDER_SCALE_DEFAULT,
+    PDF_RENDER_SCALE_HIGH,
+    PDF_RENDER_SCALE_MEDIUM,
+    PDF_RENDER_SCALE_LOW,
 )
 
 # Import PDF rendering and Vision OCR helpers
@@ -160,18 +163,26 @@ def _build_parser() -> argparse.ArgumentParser:
     parser.add_argument(
         "--confidence", action="store_true", help="Show confidence per page"
     )
+    # Quality preset (overrides scale if both provided)
+    parser.add_argument(
+        "--quality",
+        "-q",
+        choices=["low", "medium", "high"],
+        default="medium",
+        help="Quality preset: low=1.0x (fast), medium=1.5x (balanced), high=2.0x (best)",
+    )
     parser.add_argument(
         "--scale",
         type=float,
-        default=PDF_RENDER_SCALE_DEFAULT,
-        help=f"Render scale factor (default: {PDF_RENDER_SCALE_DEFAULT})",
+        default=None,
+        help="Render scale factor (overrides --quality; default: 1.5)",
     )
     parser.add_argument(
         "--jobs",
         "-j",
         type=int,
         default=1,
-        help="Number of parallel workers (default: 1, use 0 for CPU count)",
+        help="Number of parallel workers (default: 1, 0=CPU count)",
     )
     return parser
 
@@ -215,7 +226,19 @@ def main():
 
     pages = _resolve_page_list(page_range, total_pages)
     print(f"Will process pages: {pages}")
-    print(f"Render scale: {args.scale}x")
+
+    # Resolve render scale: --scale overrides --quality
+    explicit_scale = args.scale is not None
+    if args.scale is None:
+        quality_map = {
+            "low": PDF_RENDER_SCALE_LOW,
+            "medium": PDF_RENDER_SCALE_MEDIUM,
+            "high": PDF_RENDER_SCALE_HIGH,
+        }
+        args.scale = quality_map[args.quality]
+
+    quality_label = args.quality if not explicit_scale else "custom"
+    print(f"Render scale: {args.scale}x (quality: {quality_label})")
 
     # Determine worker count
     max_workers = args.jobs

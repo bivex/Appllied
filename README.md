@@ -288,11 +288,17 @@ python -m ocr_system.scripts.extract_text image.png --no-fix-bg
 ### Extract Text from PDFs (Vision)
 
 ```bash
-# Extract all pages from PDF
+# Extract all pages (default quality: medium, scale 1.5x)
 python -m ocr_system.scripts.extract_text_from_pdf document.pdf
 
-# Specific pages
-python -m ocr_system.scripts.extract_text_from_pdf document.pdf --pages 1-3,5
+# Specific pages with high quality (scale 2.0x) — slower but more accurate
+python -m ocr_system.scripts.extract_text_from_pdf document.pdf --pages 1-5 --quality high
+
+# Fast extraction with low quality (scale 1.0x) — useful for drafts
+python -m ocr_system.scripts.extract_text_from_pdf document.pdf --quality low --jobs 4
+
+# Custom scale (overrides --quality), e.g. 1.25x
+python -m ocr_system.scripts.extract_text_from_pdf document.pdf --scale 1.25
 
 # Save to file with page separators
 python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --output text.txt --separator "\n\n--- PAGE ---\n\n"
@@ -300,14 +306,37 @@ python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --output text.txt --s
 # With confidence scores per page
 python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --confidence
 
-# French language PDF
-python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --languages fr-FR
+# Parallel processing (uses multiple CPU cores; speeds up multi-page docs)
+python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --jobs 4
+
+# French language PDF with accurate mode
+python -m ocr_system.scripts.extract_text_from_pdf doc.pdf --languages fr-FR --level accurate
 ```
+
+**Options:**
+- `--pages, -p`: Page range (`'1-3,5'`, `'all'`, default: all)
+- `--level, -l`: `fast` (quicker, less accurate) or `accurate` (default)
+- `--languages, -lang`: Comma-separated BCP-47 codes (default: `en-US`)
+- `--no-correction`: Disable Vision's language correction (warning: drastic quality drop for old texts)
+- `--quality, -q`: `low` (1.0x), `medium` (1.5x, default), `high` (2.0x)
+- `--scale`: Direct scale factor (float, overrides `--quality`)
+- `--jobs, -j`: Number of parallel workers (default: 1; 0 = CPU count)
+- `--output, -o`: Output file path
+- `--separator`: Text inserted between pages (default: `'\n\n'`)
+- `--confidence`: Show per-page confidence in output
+- `--handwriting`: Use handwriting-optimized recognition (iOS 16+/macOS 13+)
 
 **Note**: PDF extraction requires:
 - macOS + PyObjC (`pyobjc-framework-Vision`, `pyobjc-framework-CoreML`)
 - The script renders each PDF page to an image (via Quartz) then runs Vision OCR
-- Processing time depends on page count and resolution
+- Processing time depends on page count, quality preset, and parallel worker count
+
+**Tips for best results:**
+1. Use `--quality high` for small, critical documents (max accuracy)
+2. Use `--quality medium` for most cases (balanced)
+3. Use `--quality low` with `--jobs` for quick drafts of large books
+4. Enable `--no-correction` only for modern, clean type (old books need correction)
+5. Combine `--jobs 4 --quality medium` for 4-6x speedup on modern Macs
 
 ### Entry Points
 
