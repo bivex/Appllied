@@ -220,6 +220,16 @@ bash ocr_system/scripts/test_e2e.sh
 - No global state, no singletons
 - Domain layer completely framework-agnostic
 
+## Code Quality
+
+- Type hints throughout (mypy-compatible, infrastructure layer ignored due to platform-specific imports)
+- Black-compatible formatting
+- Ruff linting configured
+- SRP: each class has single responsibility
+- DIP: depend on abstractions (ports), not concretions
+- No global state, no singletons
+- Domain layer completely framework-agnostic
+
 ## Future Work
 
 1. **Real Vision integration**: Full CGImage conversion, orientation handling, image preprocessing
@@ -229,6 +239,35 @@ bash ocr_system/scripts/test_e2e.sh
 5. **CQRS**: Separate read model for search queries
 6. **Event sourcing**: Persist domain events for audit trail
 7. **CI/CD**: GitHub Actions (run tests on push, lint, type check)
+
+## Additional Scripts
+
+### PDF Extraction (NEW)
+
+```bash
+# Extract all pages
+ocr-extract-pdf document.pdf
+
+# Specific pages
+ocr-extract-pdf document.pdf --pages 1-3,5
+
+# With confidence and language
+ocr-extract-pdf document.pdf --languages en-US,ru-RU --confidence
+
+# Save to file with custom separator
+ocr-extract-pdf document.pdf --output text.txt --separator "\n\n--- NEXT PAGE ---\n\n"
+```
+
+**How it works**:
+1. Loads PDF via Quartz (`CGPDFDocument`)
+2. Rasters each page to RGBA bitmap (white background, 1:1 scale)
+3. Runs `VNRecognizeTextRequest` on each page image
+4. Concatenates results with separator
+
+**Limitations**:
+- Renders at 72 DPI (PDF default size). For higher resolution, scale the rendering (future enhancement)
+- No OCR on vector text directly — always rasterizes
+- Single-threaded; large PDFs may take time
 
 ## License
 
