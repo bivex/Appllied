@@ -242,32 +242,53 @@ bash ocr_system/scripts/test_e2e.sh
 
 ## Additional Scripts
 
-### PDF Extraction (NEW)
+### PDF Extraction (NEW — WORKING!)
 
 ```bash
-# Extract all pages
+# Extract all pages from PDF
 ocr-extract-pdf document.pdf
 
 # Specific pages
 ocr-extract-pdf document.pdf --pages 1-3,5
 
-# With confidence and language
-ocr-extract-pdf document.pdf --languages en-US,ru-RU --confidence
+# Fast mode (less accurate but quicker)
+ocr-extract-pdf document.pdf --level fast
+
+# High-resolution rendering (3x scale) — better for small fonts
+ocr-extract-pdf document.pdf --scale 3.0 --confidence
 
 # Save to file with custom separator
-ocr-extract-pdf document.pdf --output text.txt --separator "\n\n--- NEXT PAGE ---\n\n"
+ocr-extract-pdf doc.pdf --output text.txt --separator "\n\n--- PAGE ---\n\n"
+
+# Multi-language
+ocr-extract-pdf document.pdf --languages en-US,ru-RU
+
+# Handwriting mode
+ocr-extract-pdf handwritten.pdf --handwriting
 ```
 
-**How it works**:
-1. Loads PDF via Quartz (`CGPDFDocument`)
-2. Rasters each page to RGBA bitmap (white background, 1:1 scale)
-3. Runs `VNRecognizeTextRequest` on each page image
-4. Concatenates results with separator
+**How it works:**
+1. Opens PDF via Quartz (`CGPDFDocumentCreateWithURL`)
+2. For each page: renders to RGBA bitmap using `CGBitmapContextCreate`
+   - White background fill (essential for Vision)
+   - Configurable scale factor (default 2.0 = ~144 DPI for standard PDF)
+3. Runs `VNRecognizeTextRequest` on each rendered page image
+4. Combines results with separator
 
-**Limitations**:
-- Renders at 72 DPI (PDF default size). For higher resolution, scale the rendering (future enhancement)
-- No OCR on vector text directly — always rasterizes
-- Single-threaded; large PDFs may take time
+**Tested on:** `test/COVID-19_ScholarshipForm.pdf`
+- 1 page, scale 2.0 → 20 lines, 97.50% confidence, 444 chars ✓
+- scale 3.0 → 18 lines, 97.22% confidence
+- fast mode → 50% confidence (expected)
+
+**Limitations:**
+- Rasters pages (no direct text layer extraction from PDF)
+- Single-threaded (can be parallelized)
+- Memory: holds all CGImages until processing complete (for large PDFs, process in batches)
+- Default 2x scale = good for most print; increase to 3x-4x for small fonts
+
+**Performance:**
+- ~1-2 seconds per page on modern Mac
+- CPU-bound (Vision + Quartz rendering)
 
 ## License
 
