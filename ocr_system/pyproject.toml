@@ -33,6 +33,8 @@ dev = [
 [project.scripts]
 ocr-generate = "ocr_system.scripts.generate_text_images:main"
 ocr-extract = "ocr_system.scripts.extract_text:main"
+ocr-extract-pdf = "ocr_system.scripts.extract_text_from_pdf:main"
+ocr-extract-pdf = "ocr_system.scripts.extract_text_from_pdf:main"
 
 [tool.setuptools.packages.find]
 where = ["."]
