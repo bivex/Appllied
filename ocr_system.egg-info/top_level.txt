@@ -1,4 +1,0 @@
-generated_images
-ocr_system
-test
-venv
