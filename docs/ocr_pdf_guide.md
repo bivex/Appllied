@@ -196,12 +196,24 @@ ocr-extract-pdf doc.pdf --separator ""
 | RAM | 8 GB | 16+ GB |
 | Python | 3.9 | 3.11+ |
 
+## 🏛️ ISO 42010 Architectural Viewpoint Traceability
+
+The PDF extraction pipeline implements the architecture specifications defined in **[docs/ARCHITECTURE.md](ARCHITECTURE.md)**:
+
+| Architectural Component | Functional & Infrastructure Mapping | Reference ADR / Specification |
+|---|---|---|
+| **Rendering Backend** | `Quartz.framework` / `Poppler (pdftoppm)` | [`ADR-0006`](adr/0006-poppler-pdf2image-rendering-pipeline.md) |
+| **Engine Selection** | `PathSelectionStrategy` (`FAST` vs `ACCURATE`) | [`ADR-0003`](adr/0003-two-path-recognition-strategy.md) |
+| **Domain Model** | `Document` Aggregate Root & `TextLine` Hierarchy | [`ADR-0004`](adr/0004-pure-python-domain-layer-zero-dependencies.md) |
+| **Performance SLA** | Multi-worker parallel page rasterization | [`docs/NFR.md`](NFR.md) (`NFR-PERF-03`) |
+
 ## Дальше
 
-- Полная документация: `README.md`
-- Архитектура: `docs/architecture.md` (если есть)
-- Тесты: `pytest ocr_system/tests/`
-- Отчёт по оптимизациям: `PERFORMANCE_OPTIMIZATION_REPORT.md`
+- **Architecture Description (ISO 42010):** [`docs/ARCHITECTURE.md`](ARCHITECTURE.md)
+- **Architectural Decision Records (ADRs):** [`docs/adr/`](adr/README.md)
+- **Quality Attributes & NFRs:** [`docs/NFR.md`](NFR.md)
+- **Main Documentation:** `README.md`
+- **Unit & Integration Tests:** `pytest ocr_system/tests/`
 
 **Точность** зависит от:
 - Качества сканирования (resolution ≥300 DPI рекомендуется)
