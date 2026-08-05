@@ -28,12 +28,15 @@ dev = [
     "mypy>=1.0.0",
     "black>=23.0.0",
     "ruff>=0.1.0",
+    "pip-licenses>=4.0.0",
+    "cyclonedx-bom>=3.10.0",
 ]
 
 [project.scripts]
 ocr-generate = "ocr_system.scripts.generate_text_images:main"
 ocr-extract = "ocr_system.scripts.extract_text:main"
 ocr-extract-pdf = "ocr_system.scripts.extract_text_from_pdf:main"
+ocr-sbom = "ocr_system.scripts.generate_sbom:main"
 
 [tool.setuptools.packages.find]
 where = ["."]

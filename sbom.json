@@ -1,0 +1,60 @@
+{
+  "specVersion": "1.4",
+  "bomFormat": "CycloneDX",
+  "metadata": {
+    "component": {
+      "type": "application",
+      "name": "ocr-system",
+      "version": "0.1.0",
+      "description": "OCR system following Domain-Driven Design and Hexagonal Architecture",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    }
+  },
+  "components": [
+    {
+      "type": "library",
+      "name": "aiohttp",
+      "version": ">=3.8.0",
+      "description": "Async HTTP client/server for asyncio",
+      "licenses": [
+        {
+          "license": {
+            "id": "Apache-2.0"
+          }
+        }
+      ]
+    },
+    {
+      "type": "library",
+      "name": "Pillow",
+      "version": ">=9.0.0",
+      "description": "Python Imaging Library",
+      "licenses": [
+        {
+          "license": {
+            "id": "HPND"
+          }
+        }
+      ]
+    },
+    {
+      "type": "framework",
+      "name": "PyObjC (Vision/CoreML)",
+      "scope": "optional",
+      "description": "macOS Native Vision & CoreML frameworks bridge",
+      "licenses": [
+        {
+          "license": {
+            "id": "MIT"
+          }
+        }
+      ]
+    }
+  ]
+}
