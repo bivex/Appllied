@@ -79,7 +79,7 @@ graph TD
         AGG["Document Aggregate Root"]
         VO["BoundingBox / Language Value Objects"]
         EV["Domain Events (OCRCompleted, etc.)"]
-        HIER["TextLine -> Word -> Character"]
+        HIER["TextLine Structure: Word to Character"]
     end
 
     subgraph "Ports (Interfaces)"
@@ -103,11 +103,11 @@ graph TD
     UC1 --> P_OCR
     UC1 --> P_IMG
     UC1 --> P_REPO
-    P_OCR <|.. A_VIS
-    P_OCR <|.. A_ML
-    P_IMG <|.. A_FILE
-    P_IMG <|.. A_HTTP
-    P_REPO <|.. A_REPO
+    A_VIS -.-> P_OCR
+    A_ML -.-> P_OCR
+    A_FILE -.-> P_IMG
+    A_HTTP -.-> P_IMG
+    A_REPO -.-> P_REPO
     UC1 --> AGG
     AGG --> HIER
     AGG --> VO
