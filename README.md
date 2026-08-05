@@ -1,8 +1,21 @@
-# OCR System
+# Appllied — On-Device OCR System
 
-A modern OCR system implementing Domain-Driven Design (DDD) and Hexagonal Architecture (Ports & Adapters), inspired by Apple's Vision framework design principles.
+A high-performance OCR system implementing Domain-Driven Design (DDD) and Hexagonal Architecture (Ports & Adapters), inspired by Apple's Vision framework design principles.
+
+## 🏛️ Architecture Governance & Standard Compliance
+
+This repository is governed under **ISO/IEC/IEEE 42010:2011 Architecture Description** and **ISO/IEC 25010 Quality Models**.
+
+| ISO 42010 Governance | Details / Document Links |
+|---|---|
+| **Architecture Specification** | [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — Comprehensive System Architecture Description |
+| **Architectural Decision Records (ADR)** | [`docs/adr/`](docs/adr/README.md) — Formal decision log (MADR 3.0 format, ADR 0000–0006) |
+| **Quality Attributes & NFRs** | [`docs/NFR.md`](docs/NFR.md) — System Non-Functional Requirements & SLA metrics |
+| **PDF Extraction Guide** | [`docs/ocr_pdf_guide.md`](docs/ocr_pdf_guide.md) — PDF pipeline setup & optimization guide |
+| **Performance Benchmarks** | [`docs/performance.md`](docs/performance.md) — Engine performance profiling & benchmarks |
 
 ## Architecture Overview
+
 
 ```
 ├── domain/           # Core business logic, pure Python, no dependencies
