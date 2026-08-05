@@ -36,6 +36,7 @@ class ProcessDocumentUseCase:
         document_repository: DocumentRepository,
         path_selector: PathSelectionStrategy,
     ):
+        """Initialize ProcessDocumentUseCase with required ports and strategies."""
         self.image_source = image_source
         self.ocr_engine = ocr_engine
         self.document_repository = document_repository
@@ -124,6 +125,7 @@ class ExtractStructureUseCase:
     """Use case for extracting structured elements from OCR text."""
 
     def __init__(self, ocr_engine: OCREngine):
+        """Initialize ExtractStructureUseCase with OCREngine adapter."""
         self.ocr_engine = ocr_engine
 
     async def execute(self, document: Document) -> Document:
@@ -146,6 +148,7 @@ class GetDocumentUseCase:
     """Use case for retrieving a document by ID."""
 
     def __init__(self, document_repository: DocumentRepository):
+        """Initialize GetDocumentUseCase with DocumentRepository port."""
         self.document_repository = document_repository
 
     async def execute(self, document_id: UUID) -> Optional[Document]:
@@ -157,6 +160,7 @@ class SearchDocumentsUseCase:
     """Use case for searching documents by type or content."""
 
     def __init__(self, document_repository: DocumentRepository):
+        """Initialize SearchDocumentsUseCase with DocumentRepository port."""
         self.document_repository = document_repository
 
     async def execute(

@@ -206,6 +206,7 @@ def _resolve_page_list(page_range, total_pages):
 
 
 def main():
+    """Main CLI entrypoint for PDF text extraction."""
     args = _build_parser().parse_args()
 
     if not VISION_AVAILABLE:

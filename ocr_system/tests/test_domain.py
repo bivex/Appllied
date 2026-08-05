@@ -49,7 +49,10 @@ LINE_Y_OFFSET = 20
 
 
 class TestBoundingBox:
+    """Tests for BoundingBox value object."""
+
     def test_intersect(self):
+        """Test BoundingBox intersection calculation."""
         a = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE, CONF_ABOVE)
         b = BoundingBox(5, 5, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE, CONF_LOWER)
         inter = a.intersect(b)
@@ -61,11 +64,13 @@ class TestBoundingBox:
         assert inter.confidence == min(a.confidence, b.confidence)
 
     def test_intersect_none(self):
+        """Test disjoint BoundingBox intersection returning None."""
         a = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         b = BoundingBox(BBOX_DISJOINT_OFFSET, BBOX_DISJOINT_OFFSET, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert a.intersect(b) is None
 
     def test_iou(self):
+        """Test Intersection over Union (IoU) calculation."""
         a = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         b = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert a.iou(b) == 1.0
@@ -73,16 +78,21 @@ class TestBoundingBox:
         assert a.iou(c) == 0.0
 
     def test_area(self):
+        """Test BoundingBox area property."""
         b = BoundingBox(1, 2, 3, 4)
         assert b.area == 12
 
     def test_center(self):
+        """Test BoundingBox center point calculation."""
         b = BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE)
         assert b.center == (BBOX_CENTER_HALF, BBOX_CENTER_HALF)
 
 
 class TestPolygon:
+    """Tests for Polygon value object."""
+
     def test_bounding_box(self):
+        """Test bounding_box calculation for Polygon points."""
         points = [Point(0, 0), Point(BBOX_SMALL_SIZE, 0), Point(BBOX_SMALL_SIZE, 5), Point(0, 5)]
         poly = Polygon(points)
         bbox = poly.bounding_box()
@@ -93,7 +103,10 @@ class TestPolygon:
 
 
 class TestLanguage:
+    """Tests for Language value object."""
+
     def test_hash(self):
+        """Test Language hashing equality and inequality."""
         l1 = Language("en")
         l2 = Language("en")
         assert hash(l1) == hash(l2)
@@ -102,14 +115,20 @@ class TestLanguage:
 
 
 class TestCharacter:
+    """Tests for Character entity."""
+
     def test_creation(self):
+        """Test Character entity instantiation."""
         char = Character("A", BoundingBox(0, 0, 1, 1), CONF_HIGH)
         assert char.text == "A"
         assert char.confidence == pytest.approx(CONF_HIGH)
 
 
 class TestWord:
+    """Tests for Word entity."""
+
     def test_split_into_characters(self):
+        """Test splitting Word into constituent Character entities."""
         word = Word("Hi", BoundingBox(0, 0, BBOX_MEDIUM_WIDTH, BBOX_MEDIUM_HEIGHT), CONF_ABOVE)
         chars = word.split_into_characters()
         assert len(chars) == 2
@@ -120,7 +139,10 @@ class TestWord:
 
 
 class TestTextLine:
+    """Tests for TextLine entity."""
+
     def test_split_into_words(self):
+        """Test splitting TextLine into constituent Word entities."""
         line = TextLine("Hello World", BoundingBox(0, 0, BBOX_LINE_WIDTH, BBOX_LINE_HEIGHT), CONF_BELOW)
         words = line.split_into_words()
         assert len(words) == 2
@@ -128,6 +150,7 @@ class TestTextLine:
         assert words[1].text == "World"
 
     def test_add_word(self):
+        """Test adding Word entity to TextLine."""
         line = TextLine("Test", BoundingBox(0, 0, BBOX_LARGE_WIDTH, BBOX_MEDIUM_HEIGHT), CONF_ABOVE)
         word = Word("Test", BoundingBox(0, 0, BBOX_LARGE_WIDTH, BBOX_MEDIUM_HEIGHT), CONF_ABOVE)
         line.add_word(word)
@@ -135,6 +158,7 @@ class TestTextLine:
         assert line.words[0] is word
 
     def test_language_property(self):
+        """Test setting and getting Language on TextLine."""
         line = TextLine("Bonjour", BoundingBox(0, 0, BBOX_LARGE_WIDTH, BBOX_MEDIUM_HEIGHT), CONF_ABOVE)
         lang = Language("fr")
         line.language = lang
@@ -142,13 +166,17 @@ class TestTextLine:
 
 
 class TestDocument:
+    """Tests for Document aggregate root."""
+
     def test_add_line(self):
+        """Test adding TextLine to Document."""
         doc = Document("img.png", DocumentType.GENERIC)
         line = TextLine("Hello", BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
         doc.add_line(line)
         assert len(doc.lines) == 1
 
     def test_add_paragraph(self):
+        """Test adding Paragraph structure to Document."""
         doc = Document("img.png", DocumentType.GENERIC)
         para = Paragraph(
             lines=[], bounding_box=BoundingBox(0, 0, BBOX_PARAGRAPH_WIDTH, BBOX_PARAGRAPH_HEIGHT),
@@ -158,6 +186,7 @@ class TestDocument:
         assert len(doc.paragraphs) == 1
 
     def test_add_table(self):
+        """Test adding Table structure to Document."""
         doc = Document("img.png", DocumentType.GENERIC)
         table = Table(
             rows=[[TextLine("Cell", BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)]],
@@ -168,6 +197,7 @@ class TestDocument:
         assert len(doc.tables) == 1
 
     def test_get_full_text(self):
+        """Test getting full concatenated text from Document."""
         doc = Document("img.png", DocumentType.GENERIC)
         line1 = TextLine("Line1", BoundingBox(0, 0, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
         line2 = TextLine("Line2", BoundingBox(0, LINE_Y_OFFSET, BBOX_SMALL_SIZE, BBOX_SMALL_SIZE), CONF_ABOVE)
@@ -176,6 +206,7 @@ class TestDocument:
         assert doc.get_full_text() == "Line1\nLine2"
 
     def test_mark_processed(self):
+        """Test marking Document as processed with timestamp."""
         doc = Document("img.png", DocumentType.GENERIC)
         before = datetime.datetime.now(datetime.timezone.utc)
         doc.mark_processed()
@@ -185,7 +216,10 @@ class TestDocument:
 
 
 class TestOCRAggregate:
+    """Tests for OCRAggregate event recording."""
+
     def test_record_events(self):
+        """Test recording domain events in OCRAggregate."""
         doc = Document("img.png", DocumentType.GENERIC)
         agg = OCRAggregate(doc)
         event = OCRRequested("img.png", doc.id)
@@ -194,6 +228,7 @@ class TestOCRAggregate:
         assert agg.domain_events[0] is event
 
     def test_clear_events(self):
+        """Test clearing recorded domain events in OCRAggregate."""
         doc = Document("img.png", DocumentType.GENERIC)
         agg = OCRAggregate(doc)
         agg.record_event(OCRRequested("img.png", doc.id))
@@ -202,7 +237,10 @@ class TestOCRAggregate:
 
 
 class TestDomainEvents:
+    """Tests for DomainEvent hierarchy."""
+
     def test_event_types(self):
+        """Test instantiation and attribute verification for domain events."""
         doc = Document("img.png", DocumentType.GENERIC)
         e1 = OCRRequested("img.png", doc.id)
         assert e1.document_id == doc.id

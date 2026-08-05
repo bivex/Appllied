@@ -30,6 +30,7 @@ class LocalFileImageSource(ImageSource):
     """Adapter for reading images from local filesystem."""
 
     def __init__(self, base_path: str):
+        """Initialize LocalFileImageSource with base filesystem search path."""
         super().__init__()
         self.base_path = Path(base_path)
 
@@ -62,6 +63,7 @@ class HttpImageSource(ImageSource):
     """Adapter for fetching images via HTTP."""
 
     def __init__(self, timeout_seconds: float = 30.0):
+        """Initialize HttpImageSource with HTTP request timeout."""
         super().__init__()
         self.timeout = timeout_seconds
 

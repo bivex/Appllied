@@ -45,6 +45,7 @@ class VisionOCRAdapter(OCREngine):
         use_language_correction: bool = True,
         recognition_level: str = "accurate",
     ):
+        """Initialize Vision OCR adapter with configuration parameters."""
         super().__init__()
         self.use_accurate = use_accurate
         self.use_language_correction = use_language_correction

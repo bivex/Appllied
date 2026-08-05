@@ -225,6 +225,7 @@ def _build_default_options(args) -> TextImageOptions:
 
 
 def main():
+    """Main CLI entrypoint for generating synthetic text images."""
     parser = argparse.ArgumentParser(
         description="Generate random text images for OCR testing"
     )

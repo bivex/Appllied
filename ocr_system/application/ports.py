@@ -34,12 +34,15 @@ class DocumentRepository(Protocol):
     """Repository interface for storing and retrieving documents."""
 
     async def save(self, document: Document) -> None:
+        """Save or update document entity in storage."""
         ...
 
     async def get_by_id(self, document_id: UUID) -> Optional[Document]:
+        """Retrieve document by its unique UUID."""
         ...
 
     async def list_by_type(self, document_type: DocumentType) -> List[Document]:
+        """List documents filtered by DocumentType classification."""
         ...
 
 
@@ -47,7 +50,9 @@ class ImageSource(Protocol):
     """Port for retrieving images from various sources."""
 
     async def get_image(self, image_url: str) -> bytes:
+        """Retrieve raw image byte payload from source URI."""
         ...
 
     async def exists(self, image_url: str) -> bool:
+        """Check whether image exists at the given URI."""
         ...

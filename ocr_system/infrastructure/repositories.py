@@ -18,6 +18,7 @@ class InMemoryDocumentRepository(DocumentRepository):
     """In-memory repository for documents."""
 
     def __init__(self):
+        """Initialize empty in-memory document storage dictionary."""
         super().__init__()
         self._documents: Dict[UUID, Document] = {}
 

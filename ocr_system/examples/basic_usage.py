@@ -16,6 +16,7 @@ from ocr_system.domain import DocumentType
 
 
 async def main():
+    """Demonstrate basic usage of the OCR system via container and use cases."""
     # Initialize container with default (Vision) adapter
     container = OCRContainer()
 

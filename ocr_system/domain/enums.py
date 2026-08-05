@@ -4,6 +4,8 @@ from enum import Enum
 
 
 class DocumentType(Enum):
+    """Classification of document types processed by OCR engine."""
+
     GENERIC = "generic"
     FORM = "form"
     INVOICE = "invoice"
@@ -15,11 +17,15 @@ class DocumentType(Enum):
 
 
 class OCRPath(Enum):
+    """Processing execution mode selection (fast vs accurate)."""
+
     FAST = "fast"
     ACCURATE = "accurate"
 
 
 class EntityType(Enum):
+    """Structured entity types extracted from recognized text."""
+
     EMAIL = "email"
     PHONE = "phone"
     URL = "url"

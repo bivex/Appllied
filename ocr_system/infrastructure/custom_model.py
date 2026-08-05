@@ -34,6 +34,7 @@ class CustomModelOCRAdapter(OCREngine):
     """Adapter for custom OCR models optimized for ANE."""
 
     def __init__(self, model_path: str, use_ane: bool = True):
+        """Initialize CustomModelOCRAdapter with Core ML model path and ANE flag."""
         super().__init__()
         self.model_path = model_path
         self.use_ane = use_ane

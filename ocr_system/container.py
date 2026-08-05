@@ -45,6 +45,7 @@ class OCRContainer:
         use_custom_model: bool = False,
         model_path: Optional[str] = None,
     ):
+        """Initialize OCR container with runtime configuration and engine selection flags."""
         self.config = config or OCRConfig.from_env()
         self.use_vision = use_vision
         self.use_custom_model = use_custom_model
@@ -57,6 +58,7 @@ class OCRContainer:
         self._path_selector: Optional[PathSelectionStrategy] = None
 
     def get_ocr_engine(self) -> OCREngine:
+        """Retrieve or lazy-initialize configured OCREngine adapter."""
         if self._ocr_engine is None:
             if self.use_custom_model and self.model_path:
                 self._ocr_engine = CustomModelOCRAdapter(
@@ -71,6 +73,7 @@ class OCRContainer:
         return self._ocr_engine
 
     def get_image_source(self, source_type: str = "local") -> ImageSource:
+        """Retrieve or lazy-initialize ImageSource adapter for local or HTTP sources."""
         if source_type == "http":
             if self._http_image_source is None:
                 self._http_image_source = HttpImageSource()
@@ -82,16 +85,19 @@ class OCRContainer:
         return self._local_image_source
 
     def get_document_repository(self) -> DocumentRepository:
+        """Retrieve or lazy-initialize DocumentRepository instance."""
         if self._document_repository is None:
             self._document_repository = InMemoryDocumentRepository()
         return self._document_repository
 
     def get_path_selector(self) -> PathSelectionStrategy:
+        """Retrieve or lazy-initialize PathSelectionStrategy implementation."""
         if self._path_selector is None:
             self._path_selector = SimplePathSelector()
         return self._path_selector
 
     def _get_use_case_dependencies(self):
+        """Helper to collect standard use case dependency tuple."""
         return (
             self.get_image_source(),
             self.get_ocr_engine(),
@@ -100,15 +106,19 @@ class OCRContainer:
         )
 
     def create_process_document_use_case(self) -> ProcessDocumentUseCase:
+        """Factory method to construct ProcessDocumentUseCase."""
         return ProcessDocumentUseCase(*self._get_use_case_dependencies())
 
     def create_get_document_use_case(self) -> GetDocumentUseCase:
+        """Factory method to construct GetDocumentUseCase."""
         return GetDocumentUseCase(self.get_document_repository())
 
     def create_search_documents_use_case(self) -> SearchDocumentsUseCase:
+        """Factory method to construct SearchDocumentsUseCase."""
         return SearchDocumentsUseCase(self.get_document_repository())
 
     def create_extract_structure_use_case(self) -> ExtractStructureUseCase:
+        """Factory method to construct ExtractStructureUseCase."""
         return ExtractStructureUseCase(self.get_ocr_engine())
 
 
@@ -121,6 +131,7 @@ class SimplePathSelector(PathSelectionStrategy):
         estimated_text_density: float,
         language_hint: Optional["Language"] = None,
     ) -> OCRPath:
+        """Select FAST vs ACCURATE OCR path based on image resolution and text density."""
         width, height = image_size
         megapixels = (width * height) / PIXELS_PER_MEGAPIXEL
         if megapixels < PATH_SELECTION_MEGAPIXEL_THRESHOLD or estimated_text_density > PATH_SELECTION_TEXT_DENSITY_THRESHOLD:

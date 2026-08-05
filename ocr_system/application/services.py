@@ -22,6 +22,7 @@ class LanguageCorrectionService:
     """Domain service for correcting OCR text based on language rules."""
 
     def __init__(self, language: Language):
+        """Initialize LanguageCorrectionService with target Language metadata."""
         self.language = language
 
     def correct(self, text: str) -> tuple[str, int]:
@@ -58,7 +59,9 @@ class PathSelectionStrategy(ABC):
         image_size: tuple[int, int],
         estimated_text_density: float,
         language_hint: Optional[Language],
-    ) -> OCRPath: ...
+    ) -> OCRPath:
+        """Select FAST vs ACCURATE OCR path based on image properties and language hints."""
+        ...
 
     def estimate_processing_time(
         self, path: OCRPath, image_size: tuple[int, int]

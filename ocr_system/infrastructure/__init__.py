@@ -95,6 +95,7 @@ class OCRConfig:
         max_image_size_mb: int = OCR_DEFAULT_MAX_IMAGE_SIZE_MB,
         enable_structured_extraction: bool = True,
     ):
+        """Initialize OCRConfig instance with specified options."""
         self.default_path = default_path
         self.use_language_correction = use_language_correction
         self.temp_directory = Path(temp_directory)

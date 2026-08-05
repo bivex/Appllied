@@ -289,6 +289,7 @@ def _build_parser() -> argparse.ArgumentParser:
 
 
 def main():
+    """Main CLI entrypoint for OCR text extraction."""
     args = _build_parser().parse_args()
 
     # Validate and prepare image
